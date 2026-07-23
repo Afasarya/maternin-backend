@@ -1,0 +1,100 @@
+{
+  "info": {
+    "name": "01 — Project Setup",
+    "description": "Task 01: Verifikasi bahwa project NestJS bisa start, global exception filter aktif, dan response format konsisten.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "GET / — App Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            },
+            "description": "Pastikan app respond dan return status running."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response wrapped in standard envelope', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status_code', 200);",
+                  "  pm.expect(json).to.have.property('message', 'success');",
+                  "  pm.expect(json).to.have.property('data');",
+                  "  pm.expect(json.data).to.have.property('app', 'MaternIn Backend');",
+                  "  pm.expect(json.data).to.have.property('status', 'running');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Handling",
+      "item": [
+        {
+          "name": "GET /nonexistent — 404 Error Format",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/nonexistent",
+              "host": ["{{base_url}}"],
+              "path": ["nonexistent"]
+            },
+            "description": "Pastikan error response format konsisten dan TIDAK mengandung stack trace atau SQL."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', () => {",
+                  "  pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Error response has correct format', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status_code', 404);",
+                  "  pm.expect(json).to.have.property('message');",
+                  "  pm.expect(json).to.have.property('error');",
+                  "  pm.expect(json).to.have.property('timestamp');",
+                  "});",
+                  "",
+                  "pm.test('No stack trace leaked', () => {",
+                  "  const body = pm.response.text();",
+                  "  pm.expect(body).to.not.include('at ');",
+                  "  pm.expect(body).to.not.include('.ts:');",
+                  "  pm.expect(body).to.not.include('node_modules');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

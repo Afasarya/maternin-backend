@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.*
+
+# Prisma generated client
+/generated/prisma
+
+# Coverage
+coverage/
+
+# Cache
+.cache/
+
+# IDE
+.vscode/
+.idea/
+.claude/
+.windsurf/
+.agents/
+
+# Misc
+.task
+skills-lock.json
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,369 @@
+{
+  "info": {
+    "name": "04 — Users & Facilities",
+    "description": "Task 04: profile management, CRUD puskesmas, dan proxy fasilitas terdekat.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    },
+    {
+      "key": "puskesmas_id",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "GET /users/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/me",
+              "host": ["{{base_url}}"],
+              "path": ["users", "me"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const profile = json.data || json;",
+                  "pm.expect(profile).not.to.have.property('password_hash');",
+                  "if (profile.id) pm.collectionVariables.set('user_id', profile.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /users/me — update nama",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Siti Aminah Diperbarui\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/me",
+              "host": ["{{base_url}}"],
+              "path": ["users", "me"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const profile = json.data || json;",
+                  "pm.expect(profile.full_name).to.eql('Siti Aminah Diperbarui');",
+                  "pm.expect(profile).not.to.have.property('password_hash');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users/:id — admin",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const profile = json.data || json;",
+                  "pm.expect(profile).not.to.have.property('password_hash');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Puskesmas",
+      "item": [
+        {
+          "name": "POST /facilities/puskesmas — admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Puskesmas Pandanaran\",\n  \"latitude\": -6.9932,\n  \"longitude\": 110.4183,\n  \"wilayah_kerja\": \"Semarang Selatan\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/facilities/puskesmas",
+              "host": ["{{base_url}}"],
+              "path": ["facilities", "puskesmas"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "const facility = json.data || json;",
+                  "if (facility.id) pm.collectionVariables.set('puskesmas_id', facility.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /facilities/puskesmas — list",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/facilities/puskesmas?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["facilities", "puskesmas"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const result = json.data || json;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /facilities/puskesmas/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/facilities/puskesmas/{{puskesmas_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["facilities", "puskesmas", "{{puskesmas_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /facilities/puskesmas/:id — admin",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"wilayah_kerja\": \"Semarang Selatan dan Sekitarnya\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/facilities/puskesmas/{{puskesmas_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["facilities", "puskesmas", "{{puskesmas_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /facilities/puskesmas/:id — admin",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/facilities/puskesmas/{{puskesmas_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["facilities", "puskesmas", "{{puskesmas_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nearby",
+      "item": [
+        {
+          "name": "GET /facilities/nearby",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/facilities/nearby?lat=-6.9&lng=110.4&radius=5000",
+              "host": ["{{base_url}}"],
+              "path": ["facilities", "nearby"],
+              "query": [
+                { "key": "lat", "value": "-6.9" },
+                { "key": "lng", "value": "110.4" },
+                { "key": "radius", "value": "5000" }
+              ]
+            },
+            "description": "Respons Nominatim di-cache Redis selama 24 jam. Endpoint khusus role ibu_hamil."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const facilities = json.data || json;",
+                  "pm.expect(facilities).to.be.an('array');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

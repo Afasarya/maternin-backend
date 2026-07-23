@@ -1,0 +1,8 @@
+{
+  "info": {
+    "name": "02 — Prisma Schema",
+    "description": "Task 02: Dokumentasi schema database Prisma. Task ini tidak menambahkan endpoint HTTP.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": []
+}
