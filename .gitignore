@@ -1,39 +1,68 @@
+# ==========================
 # Dependencies
+# ==========================
 node_modules/
 
-# Build
+# ==========================
+# Build Output
+# ==========================
 dist/
 
+# ==========================
+# Environment Variables
+# ==========================
+.env
+.env.*
+!.env.example
+
+# ==========================
+# Prisma Generated Client
+# ==========================
+generated/
+generated/prisma/
+
+# ==========================
 # Logs
+# ==========================
 *.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
-# Environment
-.env
-.env.*
-
-# Prisma generated client
-/generated/prisma
-
-# Coverage
+# ==========================
+# Testing
+# ==========================
 coverage/
 
-# Cache
-.cache/
+# ==========================
+# Documentation (Local)
+# ==========================
+task/
+postman/
 
+# ==========================
 # IDE
+# ==========================
 .vscode/
 .idea/
 .claude/
 .windsurf/
 .agents/
 
-# Misc
-.task
-skills-lock.json
+# ==========================
+# Cache
+# ==========================
+.cache/
+.tmp/
+.temp/
 
-# OS
+# ==========================
+# OS Files
+# ==========================
 .DS_Store
 Thumbs.db
+
+# ==========================
+# Misc
+# ==========================
+skills-lock.json
