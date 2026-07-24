@@ -76,20 +76,22 @@ describe('AncRecordsService', () => {
     it('creates self input for the profile owner', async () => {
       prisma.ancRecord.create.mockResolvedValue(record);
 
-      await service.create(
-        {
-          pregnancy_profile_id: profileId,
-          systolic: 120,
-          diastolic: 80,
-          weight_kg: 55,
-          recorded_at: '2026-07-24T08:00:00.000Z',
-        },
-        {
-          id: patientId,
-          role: UserRole.IBU_HAMIL,
-          puskesmas_id: puskesmasId,
-        },
-      );
+      await expect(
+        service.create(
+          {
+            pregnancy_profile_id: profileId,
+            systolic: 120,
+            diastolic: 80,
+            weight_kg: 55,
+            recorded_at: '2026-07-24T08:00:00.000Z',
+          },
+          {
+            id: patientId,
+            role: UserRole.IBU_HAMIL,
+            puskesmas_id: puskesmasId,
+          },
+        ),
+      ).resolves.toEqual({ record, created: true });
 
       expect(prisma.ancRecord.create).toHaveBeenCalledWith({
         data: {
@@ -198,7 +200,7 @@ describe('AncRecordsService', () => {
             puskesmas_id: puskesmasId,
           },
         ),
-      ).resolves.toEqual(record);
+      ).resolves.toEqual({ record, created: false });
 
       expect(prisma.ancRecord.findFirst).toHaveBeenCalledWith({
         where: { client_uuid: clientUuid },
@@ -243,7 +245,7 @@ describe('AncRecordsService', () => {
             puskesmas_id: puskesmasId,
           },
         ),
-      ).resolves.toEqual(record);
+      ).resolves.toEqual({ record, created: false });
 
       expect(prisma.ancRecord.findFirst).toHaveBeenCalledTimes(2);
     });

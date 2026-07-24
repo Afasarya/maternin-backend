@@ -63,8 +63,8 @@
                 "exec": [
                   "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
                   "const json = pm.response.json();",
-                  "const data = json.data || json;",
-                  "if (data.access_token) pm.collectionVariables.set('token_ibu', data.access_token);"
+                  "const responseData = json.data || json;",
+                  "if (responseData.access_token) pm.collectionVariables.set('token_ibu', responseData.access_token);"
                 ]
               }
             }
@@ -94,8 +94,8 @@
                 "exec": [
                   "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
                   "const json = pm.response.json();",
-                  "const data = json.data || json;",
-                  "if (data.access_token) pm.collectionVariables.set('token_bidan', data.access_token);"
+                  "const responseData = json.data || json;",
+                  "if (responseData.access_token) pm.collectionVariables.set('token_bidan', responseData.access_token);"
                 ]
               }
             }
@@ -125,8 +125,8 @@
                 "exec": [
                   "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
                   "const json = pm.response.json();",
-                  "const data = json.data || json;",
-                  "if (data.access_token) pm.collectionVariables.set('token_kader', data.access_token);"
+                  "const responseData = json.data || json;",
+                  "if (responseData.access_token) pm.collectionVariables.set('token_kader', responseData.access_token);"
                 ]
               }
             }
@@ -155,8 +155,8 @@
                 "exec": [
                   "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
                   "const json = pm.response.json();",
-                  "const data = json.data || json;",
-                  "if (data.access_token) pm.collectionVariables.set('token_admin', data.access_token);"
+                  "const responseData = json.data || json;",
+                  "if (responseData.access_token) pm.collectionVariables.set('token_admin', responseData.access_token);"
                 ]
               }
             }
@@ -238,10 +238,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "const data = json.data || json;",
-                  "if (data.access_token) pm.collectionVariables.set('token_ibu', data.access_token);"
+                  "const responseData = json.data || json;",
+                  "if (responseData.access_token) pm.collectionVariables.set('token_ibu', responseData.access_token);"
                 ]
               }
             }
@@ -293,6 +293,88 @@
               "script": {
                 "type": "text/javascript",
                 "exec": ["pm.test('Status code is 401', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Rate Limiting",
+      "description": "Limit aktual POST /auth/login adalah 5 request per 60 detik. Jalankan collection penuh secara berurutan dari server dengan limiter bersih: tiga request di folder Login dihitung sebagai attempt 1–3; folder ini menguji attempt 4–6.",
+      "item": [
+        {
+          "name": "POST /auth/login — rate limit attempt 4",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"+6281234599999\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Attempt 4 masih diproses', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/login — rate limit attempt 5",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"+6281234599999\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Attempt 5 masih diproses', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/login — rate limit attempt 6 ditolak",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"+6281234599999\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Request pertama yang melebihi limit endpoint 5 request per 60 detik."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Attempt 6 dibatasi', () => pm.response.to.have.status(429));"]
               }
             }
           ]

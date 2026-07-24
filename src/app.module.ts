@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { FacilitiesModule } from './facilities/facilities.module.js';
 import { PregnancyProfilesModule } from './pregnancy-profiles/pregnancy-profiles.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.module.js';
 
 @Module({
   imports: [
@@ -68,6 +69,9 @@ import { PrismaModule } from './prisma/prisma.module.js';
 
     // ─── Antenatal care records ───
     AncRecordsModule,
+
+    // ─── Symptom screening & AI triage ───
+    SymptomCheckinsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

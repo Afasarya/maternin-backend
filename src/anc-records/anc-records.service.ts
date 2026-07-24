@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { AncRecord } from '../../generated/prisma/client.js';
 import { AncSource, UserRole } from '../common/constants/index.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
@@ -18,6 +19,11 @@ interface Pagination {
 interface PrismaKnownRequestError {
   code: string;
   clientVersion: string;
+}
+
+export interface CreateAncRecordResult {
+  record: AncRecord;
+  created: boolean;
 }
 
 const isUniqueConstraintError = (
@@ -41,7 +47,10 @@ export class AncRecordsService {
     private readonly pregnancyProfilesService: PregnancyProfilesService,
   ) {}
 
-  async create(dto: CreateAncRecordDto, requester: CurrentUserData) {
+  async create(
+    dto: CreateAncRecordDto,
+    requester: CurrentUserData,
+  ): Promise<CreateAncRecordResult> {
     await this.assertProfileAccess(dto.pregnancy_profile_id, requester, true);
 
     if (dto.client_uuid) {
@@ -56,12 +65,12 @@ export class AncRecordsService {
           );
         }
 
-        return existing;
+        return { record: existing, created: false };
       }
     }
 
     try {
-      return await this.prisma.ancRecord.create({
+      const record = await this.prisma.ancRecord.create({
         data: {
           pregnancy_profile_id: dto.pregnancy_profile_id,
           recorded_by_user_id: requester.id,
@@ -76,6 +85,8 @@ export class AncRecordsService {
           client_uuid: dto.client_uuid,
         },
       });
+
+      return { record, created: true };
     } catch (error: unknown) {
       if (dto.client_uuid && isUniqueConstraintError(error)) {
         const existing = await this.prisma.ancRecord.findFirst({
@@ -83,7 +94,7 @@ export class AncRecordsService {
         });
 
         if (existing?.pregnancy_profile_id === dto.pregnancy_profile_id) {
-          return existing;
+          return { record: existing, created: false };
         }
 
         if (existing) {

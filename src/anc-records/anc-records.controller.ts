@@ -2,12 +2,15 @@ import {
   Body,
   Controller,
   Get,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -25,11 +28,15 @@ export class AncRecordsController {
 
   @Post()
   @Roles('ibu_hamil', 'bidan', 'kader')
-  create(
+  async create(
     @Body() dto: CreateAncRecordDto,
     @CurrentUser() requester: CurrentUserData,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.ancRecordsService.create(dto, requester);
+    const result = await this.ancRecordsService.create(dto, requester);
+
+    response.status(result.created ? HttpStatus.CREATED : HttpStatus.OK);
+    return result.record;
   }
 
   @Get()

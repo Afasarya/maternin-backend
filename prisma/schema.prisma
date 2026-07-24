@@ -186,7 +186,7 @@ model SymptomCheckin {
   answers               Json
   conjunctiva_image_url String?
   source                SymptomSource
-  client_uuid           String?       @db.Uuid
+  client_uuid           String?       @unique @db.Uuid
   created_at            DateTime      @default(now())
 
   pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id])
