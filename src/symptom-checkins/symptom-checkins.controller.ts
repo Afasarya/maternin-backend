@@ -3,13 +3,16 @@ import {
   Controller,
   Get,
   Headers,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -30,12 +33,20 @@ export class SymptomCheckinsController {
   @Roles('ibu_hamil', 'kader')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  create(
+  async create(
     @Body() dto: CreateSymptomCheckinDto,
     @CurrentUser() requester: CurrentUserData,
     @Headers('x-request-id') requestId: string,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.symptomCheckinsService.create(dto, requester, requestId);
+    const result = await this.symptomCheckinsService.create(
+      dto,
+      requester,
+      requestId,
+    );
+
+    response.status(result.created ? HttpStatus.CREATED : HttpStatus.OK);
+    return result.data;
   }
 
   @Get()

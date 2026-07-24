@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { ThrottlerModule } from '@nestjs/throttler';
 import request from 'supertest';
 import type { App } from 'supertest/types';
-import { UserRole } from '../common/constants/index.js';
+import { CheckinType, UserRole } from '../common/constants/index.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { SymptomCheckinsController } from './symptom-checkins.controller.js';
@@ -21,7 +21,10 @@ describe('SymptomCheckinsController', () => {
 
   it('rejects the eleventh create request inside one minute', async () => {
     const symptomCheckinsService = {
-      create: jest.fn().mockResolvedValue({ status: 'processing' }),
+      create: jest.fn().mockResolvedValue({
+        created: true,
+        data: { status: 'processing' },
+      }),
     };
     const moduleRef = await Test.createTestingModule({
       imports: [
@@ -78,5 +81,36 @@ describe('SymptomCheckinsController', () => {
     } finally {
       await app.close();
     }
+  });
+
+  it('returns 200 for an idempotent replay', async () => {
+    const symptomCheckinsService = {
+      create: jest.fn().mockResolvedValue({
+        created: false,
+        data: { checkin: { id: 'existing-checkin' } },
+      }),
+    };
+    const controller = new SymptomCheckinsController(
+      symptomCheckinsService as unknown as SymptomCheckinsService,
+    );
+    const response = { status: jest.fn() };
+
+    await expect(
+      controller.create(
+        {
+          pregnancy_profile_id: '22222222-2222-4222-8222-222222222222',
+          checkin_type: CheckinType.PREGNANCY,
+          answers: { sakit_kepala: false },
+        },
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          role: UserRole.IBU_HAMIL,
+          puskesmas_id: null,
+        },
+        'request-123',
+        response as never,
+      ),
+    ).resolves.toEqual({ checkin: { id: 'existing-checkin' } });
+    expect(response.status).toHaveBeenCalledWith(200);
   });
 });

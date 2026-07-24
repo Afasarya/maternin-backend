@@ -151,7 +151,10 @@ describe('SymptomCheckinsService', () => {
           patientRequester,
           requestId,
         ),
-      ).resolves.toEqual({ checkin, risk_assessment: assessment });
+      ).resolves.toEqual({
+        created: true,
+        data: { checkin, risk_assessment: assessment },
+      });
 
       expect(prisma.symptomCheckin.create).toHaveBeenCalledWith({
         data: {
@@ -202,9 +205,12 @@ describe('SymptomCheckinsService', () => {
           requestId,
         ),
       ).resolves.toEqual({
-        checkin,
-        status: 'processing',
-        message: 'Sedang diproses',
+        created: true,
+        data: {
+          checkin,
+          status: 'processing',
+          message: 'Sedang diproses',
+        },
       });
 
       expect(triageRetryQueue.add).toHaveBeenCalledWith(
@@ -235,7 +241,10 @@ describe('SymptomCheckinsService', () => {
           patientRequester,
           requestId,
         ),
-      ).resolves.toEqual({ checkin, risk_assessment: assessment });
+      ).resolves.toEqual({
+        created: false,
+        data: { checkin, risk_assessment: assessment },
+      });
 
       expect(prisma.symptomCheckin.create).not.toHaveBeenCalled();
       expect(aiServiceClient.analyzeTriageSymptoms).not.toHaveBeenCalled();
@@ -257,9 +266,12 @@ describe('SymptomCheckinsService', () => {
           requestId,
         ),
       ).resolves.toEqual({
-        checkin,
-        status: 'processing',
-        message: 'Sedang diproses',
+        created: false,
+        data: {
+          checkin,
+          status: 'processing',
+          message: 'Sedang diproses',
+        },
       });
 
       expect(prisma.symptomCheckin.create).not.toHaveBeenCalled();
@@ -308,7 +320,10 @@ describe('SymptomCheckinsService', () => {
           patientRequester,
           requestId,
         ),
-      ).resolves.toEqual({ checkin, risk_assessment: assessment });
+      ).resolves.toEqual({
+        created: false,
+        data: { checkin, risk_assessment: assessment },
+      });
     });
 
     it('accepts kader input only within the same puskesmas', async () => {
@@ -433,6 +448,42 @@ describe('SymptomCheckinsService', () => {
       await expect(
         service.findOne(checkinId, patientRequester),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('rejects another patient listing check-ins', async () => {
+      const otherRequester = {
+        id: otherPatientId,
+        role: UserRole.IBU_HAMIL,
+        puskesmas_id: puskesmasId,
+      };
+      pregnancyProfilesService.findOne.mockRejectedValue(
+        new ForbiddenException('Tidak memiliki akses ke profil kehamilan'),
+      );
+
+      await expect(
+        service.findByProfile(
+          profileId,
+          { limit: 20, offset: 0 },
+          otherRequester,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.symptomCheckin.findMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects another patient reading one check-in', async () => {
+      const otherRequester = {
+        id: otherPatientId,
+        role: UserRole.IBU_HAMIL,
+        puskesmas_id: puskesmasId,
+      };
+      prisma.symptomCheckin.findUnique.mockResolvedValue(checkin);
+      pregnancyProfilesService.findOne.mockRejectedValue(
+        new ForbiddenException('Tidak memiliki akses ke profil kehamilan'),
+      );
+
+      await expect(
+        service.findOne(checkinId, otherRequester),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 });

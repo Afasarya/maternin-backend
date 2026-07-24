@@ -82,7 +82,10 @@ export class SymptomCheckinsService {
         existing.pregnancy_profile_id,
         dto.pregnancy_profile_id,
       );
-      return this.buildExistingResult(existing, requestId);
+      return {
+        created: false,
+        data: await this.buildExistingResult(existing, requestId),
+      };
     }
 
     let checkin: SymptomCheckin;
@@ -107,7 +110,10 @@ export class SymptomCheckinsService {
             winner.pregnancy_profile_id,
             dto.pregnancy_profile_id,
           );
-          return this.buildExistingResult(winner, requestId);
+          return {
+            created: false,
+            data: await this.buildExistingResult(winner, requestId),
+          };
         }
       }
 
@@ -120,14 +126,20 @@ export class SymptomCheckinsService {
         requestId,
       );
 
-      return { checkin, risk_assessment: riskAssessment };
+      return {
+        created: true,
+        data: { checkin, risk_assessment: riskAssessment },
+      };
     } catch (error: unknown) {
       if (!(error instanceof AiServiceUnavailableException)) {
         throw error;
       }
 
       await this.enqueueTriageRetry(checkin.id, requestId);
-      return this.processingResult(checkin);
+      return {
+        created: true,
+        data: this.processingResult(checkin),
+      };
     }
   }
 
