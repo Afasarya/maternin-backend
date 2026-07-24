@@ -4,10 +4,12 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
 import { HttpModule } from '@nestjs/axios';
 import * as Joi from 'joi';
+import { AncRecordsModule } from './anc-records/anc-records.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { FacilitiesModule } from './facilities/facilities.module.js';
+import { PregnancyProfilesModule } from './pregnancy-profiles/pregnancy-profiles.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 
 @Module({
@@ -60,6 +62,12 @@ import { PrismaModule } from './prisma/prisma.module.js';
 
     // ─── Puskesmas CRUD & nearby facilities proxy ───
     FacilitiesModule,
+
+    // ─── Pregnancy profile lifecycle ───
+    PregnancyProfilesModule,
+
+    // ─── Antenatal care records ───
+    AncRecordsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

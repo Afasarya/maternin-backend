@@ -16,6 +16,11 @@ export enum PregnancyStatus {
   SELESAI = 'selesai',
 }
 
+export enum PregnancyOutcome {
+  PERSALINAN = 'persalinan',
+  KEGUGURAN = 'keguguran',
+}
+
 export enum RiskBadge {
   HIJAU = 'hijau',
   KUNING = 'kuning',

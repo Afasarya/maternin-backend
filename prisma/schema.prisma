@@ -21,6 +21,11 @@ enum PregnancyStatus {
   selesai
 }
 
+enum PregnancyOutcome {
+  persalinan
+  keguguran
+}
+
 enum RiskBadge {
   hijau
   kuning
@@ -113,26 +118,28 @@ model User {
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
-  puskesmas          Puskesmas?          @relation(fields: [puskesmas_id], references: [id])
+  puskesmas          Puskesmas?         @relation(fields: [puskesmas_id], references: [id])
   pregnancy_profiles PregnancyProfile[]
-  anc_records        AncRecord[]         @relation("RecordedBy")
+  anc_records        AncRecord[]        @relation("RecordedBy")
 
   @@index([puskesmas_id])
   @@map("users")
 }
 
 model PregnancyProfile {
-  id                       String          @id @default(uuid()) @db.Uuid
-  user_id                  String          @db.Uuid
-  hpht                     DateTime        @db.Date
-  hpl                      DateTime        @db.Date
+  id                       String            @id @default(uuid()) @db.Uuid
+  user_id                  String            @db.Uuid
+  hpht                     DateTime          @db.Date
+  hpl                      DateTime          @db.Date
   gravida                  Int
-  existing_conditions      Json?           @default("[]")
-  status                   PregnancyStatus @default(hamil)
-  nifas_start_date         DateTime?       @db.Date
-  had_preeclampsia_history Boolean         @default(false)
-  created_at               DateTime        @default(now())
-  updated_at               DateTime        @updatedAt
+  existing_conditions      Json?             @default("[]")
+  status                   PregnancyStatus   @default(hamil)
+  pregnancy_outcome        PregnancyOutcome?
+  ended_at                 DateTime?
+  nifas_start_date         DateTime?         @db.Date
+  had_preeclampsia_history Boolean           @default(false)
+  created_at               DateTime          @default(now())
+  updated_at               DateTime          @updatedAt
 
   user             User              @relation(fields: [user_id], references: [id])
   anc_records      AncRecord[]
@@ -162,7 +169,7 @@ model AncRecord {
   protein_urine        String?
   platelet_count       Decimal?  @db.Decimal(10, 2)
   recorded_at          DateTime  @default(now())
-  client_uuid          String?   @db.Uuid
+  client_uuid          String?   @unique @db.Uuid
   created_at           DateTime  @default(now())
 
   pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id])

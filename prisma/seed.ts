@@ -111,6 +111,18 @@ const userSeeds = [
   },
 ] as const;
 
+const pregnancyProfileSeeds = [
+  {
+    id: 'e0000000-0000-4000-8000-000000000001',
+    user_id: 'd0000000-0000-4000-8000-000000000001',
+    hpht: new Date('2026-07-01T00:00:00.000Z'),
+    hpl: new Date('2027-04-07T00:00:00.000Z'),
+    gravida: 1,
+    existing_conditions: [],
+    had_preeclampsia_history: false,
+  },
+] as const;
+
 async function main() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Seed data dummy tidak boleh dijalankan di production');
@@ -148,21 +160,35 @@ async function main() {
       ),
     );
 
-    const [puskesmasCount, userCount] = await Promise.all([
-      prisma.puskesmas.count({
-        where: { id: { in: puskesmasSeeds.map(({ id }) => id) } },
-      }),
-      prisma.user.count({
-        where: {
-          phone_number: {
-            in: userSeeds.map(({ phone_number }) => phone_number),
+    await prisma.$transaction(
+      pregnancyProfileSeeds.map(({ id, ...data }) =>
+        prisma.pregnancyProfile.upsert({
+          where: { id },
+          update: data,
+          create: { id, ...data },
+        }),
+      ),
+    );
+
+    const [puskesmasCount, userCount, pregnancyProfileCount] =
+      await Promise.all([
+        prisma.puskesmas.count({
+          where: { id: { in: puskesmasSeeds.map(({ id }) => id) } },
+        }),
+        prisma.user.count({
+          where: {
+            phone_number: {
+              in: userSeeds.map(({ phone_number }) => phone_number),
+            },
           },
-        },
-      }),
-    ]);
+        }),
+        prisma.pregnancyProfile.count({
+          where: { id: { in: pregnancyProfileSeeds.map(({ id }) => id) } },
+        }),
+      ]);
 
     console.log(
-      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna.`,
+      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan.`,
     );
     console.log(`Password seluruh akun dummy: ${SEED_PASSWORD}`);
     console.table(

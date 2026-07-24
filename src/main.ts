@@ -35,4 +35,4 @@ async function bootstrap() {
   logger.log(`MaternIn Backend running on port ${port}`);
 }
 
-bootstrap();
+void bootstrap();
