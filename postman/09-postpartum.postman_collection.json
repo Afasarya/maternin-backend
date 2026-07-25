@@ -1,0 +1,765 @@
+{
+  "info": {
+    "name": "09 — Postpartum",
+    "description": "Task 09: postpartum_logs terstruktur, evaluasi AI synchronous/fallback processing, callback internal, idempotensi client_uuid, cadence reminder 1/2/7 hari, pagination/sorting, serta access control owner, kader/bidan wilayah, admin, dan penolakan lintas wilayah.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "internal_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_kader",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_kader_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000009",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_hamil_id",
+      "value": "e0000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "postpartum_log_id",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    },
+    {
+      "key": "postpartum_client_uuid",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    },
+    {
+      "key": "idempotency_log_id",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Create Log",
+      "item": [
+        {
+          "name": "POST /postpartum-logs — normal check-in",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('postpartum_client_uuid', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.log.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));",
+                  "pm.expect(result.log.day_number).to.eql(3);",
+                  "pm.expect(result.log.client_uuid).to.eql(pm.collectionVariables.get('postpartum_client_uuid'));",
+                  "pm.expect(['processing', undefined]).to.include(result.status);",
+                  "if (result.evaluation) {",
+                  "  pm.expect(result.evaluation.red_flag_triggered).to.eql(false);",
+                  "  pm.expect(result.log.red_flag_triggered).to.eql(false);",
+                  "}",
+                  "pm.collectionVariables.set('postpartum_log_id', result.log.id);",
+                  "pm.collectionVariables.set('idempotency_log_id', result.log.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "postman-postpartum-normal",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"day_number\": 3,\n  \"bleeding_level\": \"normal\",\n  \"fever\": false,\n  \"wound_condition\": \"baik\",\n  \"headache_severe\": false,\n  \"mood_flag\": \"baik\",\n  \"client_uuid\": \"{{postpartum_client_uuid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"]
+            }
+          }
+        },
+        {
+          "name": "POST /postpartum-logs — idempotency replay",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.log.id).to.eql(pm.collectionVariables.get('idempotency_log_id'));",
+                  "pm.expect(result.log.client_uuid).to.eql(pm.collectionVariables.get('postpartum_client_uuid'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"day_number\": 3,\n  \"bleeding_level\": \"normal\",\n  \"fever\": false,\n  \"wound_condition\": \"baik\",\n  \"headache_severe\": false,\n  \"mood_flag\": \"baik\",\n  \"client_uuid\": \"{{postpartum_client_uuid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"]
+            },
+            "description": "Replay harus mengembalikan log pertama dengan 200 tanpa insert atau evaluasi AI ganda."
+          }
+        },
+        {
+          "name": "POST /postpartum-logs — red flag scenario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.log.bleeding_level).to.eql('banyak');",
+                  "pm.expect(result.log.headache_severe).to.eql(true);",
+                  "pm.expect(['processing', undefined]).to.include(result.status);",
+                  "if (result.evaluation) {",
+                  "  pm.expect(result.evaluation).to.have.keys('red_flag_triggered', 'reason', 'mental_health_flag');",
+                  "  pm.expect(result.evaluation.red_flag_triggered).to.eql(true);",
+                  "  pm.expect(result.log.red_flag_triggered).to.eql(true);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "postman-postpartum-red-flag",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"day_number\": 4,\n  \"bleeding_level\": \"banyak\",\n  \"fever\": false,\n  \"wound_condition\": \"baik\",\n  \"headache_severe\": true,\n  \"mood_flag\": \"baik\",\n  \"client_uuid\": \"{{$guid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"]
+            }
+          }
+        },
+        {
+          "name": "POST /postpartum-logs — kader wilayah sukses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.log.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"day_number\": 15,\n  \"bleeding_level\": \"normal\",\n  \"fever\": false,\n  \"wound_condition\": \"baik\",\n  \"headache_severe\": false,\n  \"mood_flag\": \"kadang_sedih\",\n  \"client_uuid\": \"{{$guid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"]
+            }
+          }
+        },
+        {
+          "name": "POST /postpartum-logs — error profil bukan nifas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('nifas');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_hamil_id}}\",\n  \"day_number\": 1,\n  \"bleeding_level\": \"normal\",\n  \"fever\": false,\n  \"wound_condition\": \"baik\",\n  \"headache_severe\": false,\n  \"mood_flag\": \"baik\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Internal Callback",
+      "item": [
+        {
+          "name": "POST /internal/postpartum-flags — sukses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const log = pm.response.json().data;",
+                  "pm.expect(log.id).to.eql(pm.collectionVariables.get('postpartum_log_id'));",
+                  "pm.expect(log.red_flag_triggered).to.eql(true);",
+                  "pm.expect(log.evaluation_reason).to.include('Perdarahan banyak');",
+                  "pm.expect(log.mental_health_flag).to.eql(false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Token",
+                "value": "{{internal_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"postpartum_log_id\": \"{{postpartum_log_id}}\",\n  \"red_flag_triggered\": true,\n  \"reason\": \"Perdarahan banyak + sakit kepala hebat\",\n  \"mental_health_flag\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/internal/postpartum-flags",
+              "host": ["{{base_url}}"],
+              "path": ["internal", "postpartum-flags"]
+            }
+          }
+        },
+        {
+          "name": "POST /internal/postpartum-flags — tanpa token 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', () => pm.response.to.have.status(401));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('Token internal');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"postpartum_log_id\": \"{{postpartum_log_id}}\",\n  \"red_flag_triggered\": false,\n  \"reason\": \"Tidak ada red flag\",\n  \"mental_health_flag\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/internal/postpartum-flags",
+              "host": ["{{base_url}}"],
+              "path": ["internal", "postpartum-flags"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read",
+      "item": [
+        {
+          "name": "GET /postpartum-logs — owner paginated day ASC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');",
+                  "pm.expect(result.data.length).to.be.at.most(10);",
+                  "for (let i = 1; i < result.data.length; i++) pm.expect(result.data[i - 1].day_number).to.be.at.most(result.data[i].day_number);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs?pregnancy_profile_id={{pregnancy_profile_id}}&limit=10&offset=0&sort=day_asc",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"],
+              "query": [
+                { "key": "pregnancy_profile_id", "value": "{{pregnancy_profile_id}}" },
+                { "key": "limit", "value": "10" },
+                { "key": "offset", "value": "0" },
+                { "key": "sort", "value": "day_asc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /postpartum-logs/:id — owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const log = pm.response.json().data;",
+                  "pm.expect(log.id).to.eql(pm.collectionVariables.get('postpartum_log_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs/{{postpartum_log_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs", "{{postpartum_log_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /postpartum-logs — bidan wilayah",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.total).to.be.at.least(1);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs?pregnancy_profile_id={{pregnancy_profile_id}}&sort=created_desc",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"],
+              "query": [
+                { "key": "pregnancy_profile_id", "value": "{{pregnancy_profile_id}}" },
+                { "key": "sort", "value": "created_desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /postpartum-logs — admin full access",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');",
+                  "pm.expect(result.total).to.be.at.least(1);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs?pregnancy_profile_id={{pregnancy_profile_id}}&limit=10&offset=0&sort=created_desc",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"],
+              "query": [
+                { "key": "pregnancy_profile_id", "value": "{{pregnancy_profile_id}}" },
+                { "key": "limit", "value": "10" },
+                { "key": "offset", "value": "0" },
+                { "key": "sort", "value": "created_desc" }
+              ]
+            },
+            "description": "Regresi PRD section 8: admin memiliki full read access ke list postpartum logs."
+          }
+        },
+        {
+          "name": "GET /postpartum-logs/:id — admin full access",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const log = pm.response.json().data;",
+                  "pm.expect(log.id).to.eql(pm.collectionVariables.get('postpartum_log_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs/{{postpartum_log_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs", "{{postpartum_log_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access Control",
+      "item": [
+        {
+          "name": "POST create — ibu non-owner ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_ibu_lain}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"day_number\": 5,\n  \"bleeding_level\": \"normal\",\n  \"fever\": false,\n  \"wound_condition\": \"baik\",\n  \"headache_severe\": false,\n  \"mood_flag\": \"baik\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"]
+            }
+          }
+        },
+        {
+          "name": "POST create — kader luar wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_kader_lain}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"day_number\": 5,\n  \"bleeding_level\": \"normal\",\n  \"fever\": false,\n  \"wound_condition\": \"baik\",\n  \"headache_severe\": false,\n  \"mood_flag\": \"baik\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"]
+            }
+          }
+        },
+        {
+          "name": "GET list — ibu non-owner ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_ibu_lain}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"],
+              "query": [
+                { "key": "pregnancy_profile_id", "value": "{{pregnancy_profile_id}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET list — kader wilayah sendiri ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_kader}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs"],
+              "query": [
+                { "key": "pregnancy_profile_id", "value": "{{pregnancy_profile_id}}" }
+              ]
+            },
+            "description": "PRD section 8: kader tidak boleh membaca data klinis, termasuk profil dalam wilayahnya sendiri."
+          }
+        },
+        {
+          "name": "GET detail — kader wilayah sendiri ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_kader}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs/{{postpartum_log_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs", "{{postpartum_log_id}}"]
+            },
+            "description": "PRD section 8: kader tidak boleh membaca detail klinis, termasuk profil dalam wilayahnya sendiri."
+          }
+        },
+        {
+          "name": "GET detail — bidan luar wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_bidan_lain}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/postpartum-logs/{{postpartum_log_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["postpartum-logs", "{{postpartum_log_id}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

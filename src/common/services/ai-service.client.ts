@@ -83,11 +83,26 @@ export class AiServiceClient {
     payload: Record<string, unknown>,
     requestId: string,
   ): Promise<PostpartumEvaluationResponse> {
-    return this.post<PostpartumEvaluationResponse>(
+    return this.evaluatePostpartumResponse(payload, requestId);
+  }
+
+  private async evaluatePostpartumResponse(
+    payload: Record<string, unknown>,
+    requestId: string,
+  ) {
+    const data = await this.post<unknown>(
       '/api/v1/postpartum/evaluate',
       payload,
       requestId,
     );
+
+    if (!this.isPostpartumEvaluationResponse(data)) {
+      throw new AiServiceUnavailableException(
+        'Respons evaluasi postpartum AI Service tidak valid',
+      );
+    }
+
+    return data;
   }
 
   chat(
@@ -141,22 +156,56 @@ export class AiServiceClient {
 
     return (
       validBadges.includes(response.risk_badge) &&
-      typeof response.aggregate_score === 'number' &&
-      Number.isFinite(response.aggregate_score) &&
+      this.isNumberInRange(response.aggregate_score, 0, 100) &&
       Array.isArray(response.risk_factors) &&
       response.risk_factors.every((factor) => typeof factor === 'string') &&
       typeof response.recommendation_text === 'string' &&
-      this.isOptionalFiniteNumber(response.triage_score) &&
-      this.isOptionalFiniteNumber(response.anemia_probability, true) &&
-      this.isOptionalFiniteNumber(response.preeclampsia_probability, true)
+      this.isOptionalNumberInRange(response.triage_score, 0, 100) &&
+      this.isOptionalNumberInRange(response.anemia_probability, 0, 1, true) &&
+      this.isOptionalNumberInRange(
+        response.preeclampsia_probability,
+        0,
+        1,
+        true,
+      )
     );
   }
 
-  private isOptionalFiniteNumber(value: unknown, nullable = false) {
+  private isPostpartumEvaluationResponse(
+    value: unknown,
+  ): value is PostpartumEvaluationResponse {
+    if (typeof value !== 'object' || value === null) {
+      return false;
+    }
+
+    const response = value as Record<string, unknown>;
+
+    return (
+      typeof response.red_flag_triggered === 'boolean' &&
+      typeof response.reason === 'string' &&
+      typeof response.mental_health_flag === 'boolean'
+    );
+  }
+
+  private isOptionalNumberInRange(
+    value: unknown,
+    minimum: number,
+    maximum: number,
+    nullable = false,
+  ) {
     return (
       value === undefined ||
       (nullable && value === null) ||
-      (typeof value === 'number' && Number.isFinite(value))
+      this.isNumberInRange(value, minimum, maximum)
+    );
+  }
+
+  private isNumberInRange(value: unknown, minimum: number, maximum: number) {
+    return (
+      typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= minimum &&
+      value <= maximum
     );
   }
 }

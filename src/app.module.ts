@@ -9,8 +9,10 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { FacilitiesModule } from './facilities/facilities.module.js';
+import { PostpartumModule } from './postpartum/postpartum.module.js';
 import { PregnancyProfilesModule } from './pregnancy-profiles/pregnancy-profiles.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { RiskAssessmentsModule } from './risk-assessments/risk-assessments.module.js';
 import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.module.js';
 
 @Module({
@@ -72,6 +74,12 @@ import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.modul
 
     // ─── Symptom screening & AI triage ───
     SymptomCheckinsModule,
+
+    // ─── Risk assessment history & internal AI callback ───
+    RiskAssessmentsModule,
+
+    // ─── Structured postpartum check-ins & red-flag evaluation ───
+    PostpartumModule,
   ],
   controllers: [AppController],
   providers: [AppService],

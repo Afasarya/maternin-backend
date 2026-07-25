@@ -1,0 +1,552 @@
+{
+  "info": {
+    "name": "08 — Risk Assessments",
+    "description": "Task 08: callback internal AI Service, validasi X-Internal-Token, histori paginated, detail, latest cache, cadence reminder, serta invalidasi cache. Isi token JWT dan internal token melalui collection variables; jangan simpan credential nyata dalam file.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "internal_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "risk_assessment_id",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Internal Callback",
+      "item": [
+        {
+          "name": "POST /internal/risk-assessments — sukses kuning",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Token",
+                "value": "{{internal_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"symptom_checkin_id\": null,\n  \"triage_score\": 52.5,\n  \"anemia_probability\": 0.3,\n  \"preeclampsia_probability\": 0.45,\n  \"aggregate_score\": 58.25,\n  \"risk_badge\": \"kuning\",\n  \"risk_factors\": [\"Keluhan perlu dipantau\"],\n  \"recommendation_text\": \"Hubungi bidan dan lakukan pemantauan lanjutan.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/internal/risk-assessments",
+              "host": ["{{base_url}}"],
+              "path": ["internal", "risk-assessments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const assessment = pm.response.json().data;",
+                  "pm.expect(assessment.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));",
+                  "pm.expect(assessment.risk_badge).to.eql('kuning');",
+                  "pm.expect(assessment.risk_factors).to.be.an('array');",
+                  "pm.collectionVariables.set('risk_assessment_id', assessment.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /internal/risk-assessments — tanpa token 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"symptom_checkin_id\": null,\n  \"triage_score\": 20,\n  \"anemia_probability\": null,\n  \"preeclampsia_probability\": null,\n  \"aggregate_score\": 20,\n  \"risk_badge\": \"hijau\",\n  \"risk_factors\": [],\n  \"recommendation_text\": \"Lanjutkan pemantauan rutin.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/internal/risk-assessments",
+              "host": ["{{base_url}}"],
+              "path": ["internal", "risk-assessments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', () => pm.response.to.have.status(401));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('Token internal');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /internal/risk-assessments — merah",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Token",
+                "value": "{{internal_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"symptom_checkin_id\": null,\n  \"triage_score\": 75,\n  \"anemia_probability\": 0.3,\n  \"preeclampsia_probability\": 0.8,\n  \"aggregate_score\": 84,\n  \"risk_badge\": \"merah\",\n  \"risk_factors\": [\"Tekanan darah tinggi\", \"Sakit kepala hebat\"],\n  \"recommendation_text\": \"Segera menuju fasilitas kesehatan.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/internal/risk-assessments",
+              "host": ["{{base_url}}"],
+              "path": ["internal", "risk-assessments"]
+            },
+            "description": "Membuat assessment merah. Cadence reminder ANC aktif menjadi 3 hari. Cache latest dan dashboard bidan diinvalidasi."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const assessment = pm.response.json().data;",
+                  "pm.expect(assessment.risk_badge).to.eql('merah');",
+                  "pm.collectionVariables.set('risk_assessment_id', assessment.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /internal/risk-assessments — hijau",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Token",
+                "value": "{{internal_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"symptom_checkin_id\": null,\n  \"triage_score\": 15,\n  \"anemia_probability\": 0.08,\n  \"preeclampsia_probability\": 0.04,\n  \"aggregate_score\": 12.5,\n  \"risk_badge\": \"hijau\",\n  \"risk_factors\": [],\n  \"recommendation_text\": \"Lanjutkan pemeriksaan rutin.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/internal/risk-assessments",
+              "host": ["{{base_url}}"],
+              "path": ["internal", "risk-assessments"]
+            },
+            "description": "Membuat assessment hijau. Cadence reminder ANC aktif menjadi 14 hari. Menjadi data latest setelah callback."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const assessment = pm.response.json().data;",
+                  "pm.expect(assessment.risk_badge).to.eql('hijau');",
+                  "pm.collectionVariables.set('risk_assessment_id', assessment.id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Public Read",
+      "item": [
+        {
+          "name": "GET /pregnancy-profiles/:id/risk-assessments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pregnancy-profiles/{{pregnancy_profile_id}}/risk-assessments?limit=10&offset=0",
+              "host": ["{{base_url}}"],
+              "path": [
+                "pregnancy-profiles",
+                "{{pregnancy_profile_id}}",
+                "risk-assessments"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');",
+                  "pm.expect(result.data.length).to.be.at.most(10);",
+                  "for (let i = 1; i < result.data.length; i++) {",
+                  "  pm.expect(new Date(result.data[i - 1].created_at).getTime()).to.be.at.least(new Date(result.data[i].created_at).getTime());",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /risk-assessments/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/risk-assessments/{{risk_assessment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["risk-assessments", "{{risk_assessment_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const assessment = pm.response.json().data;",
+                  "pm.expect(assessment.id).to.eql(pm.collectionVariables.get('risk_assessment_id'));",
+                  "pm.expect(assessment.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /risk-assessments/latest",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/risk-assessments/latest?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["risk-assessments", "latest"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            },
+            "description": "Jalankan setelah callback hijau. Hasil harus data terbaru, membuktikan cache latest lama telah diinvalidasi. Panggilan berikutnya memakai cache TTL 10 menit."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const assessment = pm.response.json().data;",
+                  "pm.expect(assessment.id).to.eql(pm.collectionVariables.get('risk_assessment_id'));",
+                  "pm.expect(assessment.risk_badge).to.eql('hijau');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /pregnancy-profiles/:id/risk-assessments — admin full access",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pregnancy-profiles/{{pregnancy_profile_id}}/risk-assessments?limit=10&offset=0",
+              "host": ["{{base_url}}"],
+              "path": [
+                "pregnancy-profiles",
+                "{{pregnancy_profile_id}}",
+                "risk-assessments"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Regresi PRD section 8: admin memiliki full read access."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /risk-assessments/latest — admin full access",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/risk-assessments/latest?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["risk-assessments", "latest"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            },
+            "description": "Regresi PRD section 8: admin memiliki full read access ke assessment terbaru."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const assessment = pm.response.json().data;",
+                  "pm.expect(assessment.id).to.eql(pm.collectionVariables.get('risk_assessment_id'));",
+                  "pm.expect(assessment.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Access Control",
+      "item": [
+        {
+          "name": "GET history — ibu hamil bukan owner ditolak",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pregnancy-profiles/{{pregnancy_profile_id}}/risk-assessments?limit=10&offset=0",
+              "host": ["{{base_url}}"],
+              "path": [
+                "pregnancy-profiles",
+                "{{pregnancy_profile_id}}",
+                "risk-assessments"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Regresi IDOR: ibu hamil lain tidak boleh membaca histori assessment profil ini."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET detail — ibu hamil bukan owner ditolak",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/risk-assessments/{{risk_assessment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["risk-assessments", "{{risk_assessment_id}}"]
+            },
+            "description": "Regresi IDOR: ibu hamil lain tidak boleh membaca detail assessment profil ini."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET latest — bidan puskesmas lain ditolak",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/risk-assessments/latest?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["risk-assessments", "latest"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            },
+            "description": "Regresi scoping wilayah: bidan dari puskesmas lain tidak boleh membaca latest assessment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -40,7 +40,6 @@ enum AncSource {
 
 enum CheckinType {
   pregnancy
-  postpartum
 }
 
 enum BleedingLevel {
@@ -198,7 +197,7 @@ model SymptomCheckin {
 model RiskAssessment {
   id                       String    @id @default(uuid()) @db.Uuid
   pregnancy_profile_id     String    @db.Uuid
-  symptom_checkin_id       String?   @db.Uuid
+  symptom_checkin_id       String?   @unique @db.Uuid
   triage_score             Decimal   @db.Decimal(5, 2)
   anemia_probability       Decimal?  @db.Decimal(5, 4)
   preeclampsia_probability Decimal?  @db.Decimal(5, 4)
@@ -226,10 +225,16 @@ model PostpartumLog {
   headache_severe      Boolean
   mood_flag            MoodFlag
   red_flag_triggered   Boolean        @default(false)
+  evaluation_reason    String?
+  mental_health_flag   Boolean?
+  evaluated_at         DateTime?
+  client_uuid          String?        @unique @db.Uuid
   created_at           DateTime       @default(now())
 
   pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id])
 
+  @@index([pregnancy_profile_id, day_number])
+  @@index([pregnancy_profile_id, created_at])
   @@map("postpartum_logs")
 }
 
@@ -284,6 +289,7 @@ model Reminder {
 
   pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id])
 
+  @@unique([pregnancy_profile_id, reminder_type])
   @@index([next_trigger_at])
   @@map("reminders")
 }

@@ -35,7 +35,6 @@ export enum AncSource {
 
 export enum CheckinType {
   PREGNANCY = 'pregnancy',
-  POSTPARTUM = 'postpartum',
 }
 
 export enum BleedingLevel {

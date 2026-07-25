@@ -71,9 +71,80 @@ describe('AiServiceClient', () => {
     ).rejects.toBeInstanceOf(AiServiceUnavailableException);
   });
 
+  it('calls postpartum evaluation with timeout and tracing headers', async () => {
+    const postpartumPayload = {
+      pregnancy_profile_id: payload.pregnancy_profile_id,
+      postpartum_log: {
+        id: '33333333-3333-4333-8333-333333333333',
+        day_number: 3,
+        bleeding_level: 'normal',
+        fever: false,
+        wound_condition: 'baik',
+        headache_severe: false,
+        mood_flag: 'baik',
+      },
+      had_preeclampsia_history: false,
+    };
+    const response = {
+      red_flag_triggered: false,
+      reason: 'Tidak ada red flag',
+      mental_health_flag: false,
+    };
+    httpService.post.mockReturnValue(of({ data: response }));
+
+    await expect(
+      service.evaluatePostpartum(postpartumPayload, 'request-postpartum'),
+    ).resolves.toEqual(response);
+
+    expect(httpService.post).toHaveBeenCalledWith(
+      'http://ai-service.example/api/v1/postpartum/evaluate',
+      postpartumPayload,
+      {
+        timeout: 5000,
+        headers: {
+          'X-Internal-Token': 'internal-token',
+          'X-Request-Id': 'request-postpartum',
+        },
+      },
+    );
+  });
+
+  it('rejects malformed postpartum responses', async () => {
+    httpService.post.mockReturnValue(
+      of({ data: { red_flag_triggered: 'false' } }),
+    );
+
+    await expect(
+      service.evaluatePostpartum({}, 'request-postpartum'),
+    ).rejects.toBeInstanceOf(AiServiceUnavailableException);
+  });
+
   it('rejects malformed triage responses', async () => {
     httpService.post.mockReturnValue(
       of({ data: { risk_badge: 'merah', aggregate_score: '84' } }),
+    );
+
+    await expect(
+      service.analyzeTriageSymptoms(payload, 'request-123'),
+    ).rejects.toBeInstanceOf(AiServiceUnavailableException);
+  });
+
+  it.each([
+    { aggregate_score: 101 },
+    { triage_score: -1 },
+    { anemia_probability: 1.01 },
+    { preeclampsia_probability: -0.01 },
+  ])('rejects out-of-range triage values: %o', async (invalidValue) => {
+    httpService.post.mockReturnValue(
+      of({
+        data: {
+          risk_badge: RiskBadge.MERAH,
+          aggregate_score: 84,
+          risk_factors: ['Tekanan darah tinggi'],
+          recommendation_text: 'Segera ke fasilitas kesehatan',
+          ...invalidValue,
+        },
+      }),
     );
 
     await expect(

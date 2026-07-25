@@ -1,0 +1,468 @@
+{
+  "info": {
+    "name": "07 — Symptom Check-ins",
+    "description": "Task 07: symptom check-in ibu/kader, integrasi AI triage, idempotensi client_uuid, fallback processing + BullMQ retry, read scoping, dan rate limit. Gunakan akun serta profil dari seed. AI Service harus tersedia untuk respons risk_assessment; bila tidak tersedia, API tetap menyimpan check-in dan mengembalikan status processing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "symptom_checkin_id",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    },
+    {
+      "key": "symptom_client_uuid",
+      "value": "f1000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "idempotency_checkin_id",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    },
+    {
+      "key": "rate_limit_attempt",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Create",
+      "item": [
+        {
+          "name": "POST /symptom-checkins — ibu_hamil pregnancy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "postman-triage-pregnancy",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"checkin_type\": \"pregnancy\",\n  \"answers\": {\n    \"bengkak_kaki\": true,\n    \"sakit_kepala\": \"berat\",\n    \"pandangan_kabur\": false\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/symptom-checkins",
+              "host": ["{{base_url}}"],
+              "path": ["symptom-checkins"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('symptom_client_uuid', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "const result = json.data || json;",
+                  "pm.expect(result.checkin).to.be.an('object');",
+                  "pm.expect(result.checkin.checkin_type).to.eql('pregnancy');",
+                  "pm.expect(result.checkin.source).to.eql('self');",
+                  "pm.expect(['processing', undefined]).to.include(result.status);",
+                  "if (result.risk_assessment) pm.expect(result.risk_assessment.symptom_checkin_id).to.eql(result.checkin.id);",
+                  "if (result.checkin.id) pm.collectionVariables.set('symptom_checkin_id', result.checkin.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /symptom-checkins — conjunctiva image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"checkin_type\": \"pregnancy\",\n  \"answers\": {\n    \"mudah_lelah\": true,\n    \"pusing\": true\n  },\n  \"conjunctiva_image_url\": \"https://cdn.example.test/conjunctiva/sample.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/symptom-checkins",
+              "host": ["{{base_url}}"],
+              "path": ["symptom-checkins"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.checkin.conjunctiva_image_url).to.eql('https://cdn.example.test/conjunctiva/sample.jpg');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /symptom-checkins — idempotency pertama",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"checkin_type\": \"pregnancy\",\n  \"answers\": {\n    \"mual_berat\": true\n  },\n  \"client_uuid\": \"{{symptom_client_uuid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/symptom-checkins",
+              "host": ["{{base_url}}"],
+              "path": ["symptom-checkins"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.checkin.client_uuid).to.eql(pm.collectionVariables.get('symptom_client_uuid'));",
+                  "pm.collectionVariables.set('idempotency_checkin_id', result.checkin.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /symptom-checkins — idempotency retry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"checkin_type\": \"pregnancy\",\n  \"answers\": {\n    \"mual_berat\": true\n  },\n  \"client_uuid\": \"{{symptom_client_uuid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/symptom-checkins",
+              "host": ["{{base_url}}"],
+              "path": ["symptom-checkins"]
+            },
+            "description": "Harus mengembalikan check-in pertama. Record baru tidak dibuat. Jika AI belum selesai, job retry dengan ID check-in yang sama tetap idempotent."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.checkin.id).to.eql(pm.collectionVariables.get('idempotency_checkin_id'));",
+                  "pm.expect(result.checkin.client_uuid).to.eql(pm.collectionVariables.get('symptom_client_uuid'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Read",
+      "item": [
+        {
+          "name": "GET /symptom-checkins — list paginated",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/symptom-checkins?pregnancy_profile_id={{pregnancy_profile_id}}&limit=10&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["symptom-checkins"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');",
+                  "pm.expect(result.data.length).to.be.at.most(10);",
+                  "for (let i = 1; i < result.data.length; i++) {",
+                  "  pm.expect(new Date(result.data[i - 1].created_at).getTime()).to.be.at.least(new Date(result.data[i].created_at).getTime());",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /symptom-checkins/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/symptom-checkins/{{symptom_checkin_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["symptom-checkins", "{{symptom_checkin_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const checkin = pm.response.json().data;",
+                  "pm.expect(checkin.id).to.eql(pm.collectionVariables.get('symptom_checkin_id'));",
+                  "pm.expect(checkin.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Access Control",
+      "item": [
+        {
+          "name": "GET /symptom-checkins — list user lain ditolak",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/symptom-checkins?pregnancy_profile_id={{pregnancy_profile_id}}&limit=10&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["symptom-checkins"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Regresi IDOR: ibu hamil lain bukan owner harus ditolak."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "const json = pm.response.json();",
+                  "pm.expect(JSON.stringify(json.message)).to.include('akses');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /symptom-checkins/:id — user lain ditolak",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/symptom-checkins/{{symptom_checkin_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["symptom-checkins", "{{symptom_checkin_id}}"]
+            },
+            "description": "Regresi IDOR: detail check-in milik ibu lain harus ditolak."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "const json = pm.response.json();",
+                  "pm.expect(JSON.stringify(json.message)).to.include('akses');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Handling",
+      "item": [
+        {
+          "name": "POST /symptom-checkins — rate limit rapid fire",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"checkin_type\": \"pregnancy\",\n  \"answers\": {\n    \"rate_limit_test\": true\n  },\n  \"client_uuid\": \"{{$guid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/symptom-checkins",
+              "host": ["{{base_url}}"],
+              "path": ["symptom-checkins"]
+            },
+            "description": "Request mengulang sampai menerima 429, maksimum 11 percobaan. Request create sebelumnya dalam collection penuh ikut memakai window rate limit yang sama."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const attempt = Number(pm.collectionVariables.get('rate_limit_attempt') || '1');",
+                  "if (pm.response.code === 429) {",
+                  "  pm.test('Create endpoint is rate limited', () => pm.response.to.have.status(429));",
+                  "  pm.collectionVariables.set('rate_limit_attempt', '1');",
+                  "  pm.execution.setNextRequest(null);",
+                  "} else {",
+                  "  pm.test(`Attempt ${attempt} is accepted`, () => pm.response.to.have.status(201));",
+                  "  pm.expect(attempt).to.be.below(11);",
+                  "  pm.collectionVariables.set('rate_limit_attempt', String(attempt + 1));",
+                  "  pm.execution.setNextRequest('POST /symptom-checkins — rate limit rapid fire');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

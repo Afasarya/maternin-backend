@@ -37,8 +37,12 @@ coverage/
 # ==========================
 # Documentation (Local)
 # ==========================
-task/
-postman/
+task/*
+!task/prd-backend.md
+postman/*
+!postman/07-symptom-checkins.postman_collection.json
+!postman/08-risk-assessments.postman_collection.json
+!postman/09-postpartum.postman_collection.json
 
 # ==========================
 # IDE

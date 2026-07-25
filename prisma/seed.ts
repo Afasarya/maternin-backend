@@ -1,7 +1,12 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
-import { PrismaClient, UserRole } from '../generated/prisma/client.js';
+import {
+  PregnancyOutcome,
+  PregnancyStatus,
+  PrismaClient,
+  UserRole,
+} from '../generated/prisma/client.js';
 
 const SEED_PASSWORD = 'MaternIn123!';
 
@@ -120,6 +125,19 @@ const pregnancyProfileSeeds = [
     gravida: 1,
     existing_conditions: [],
     had_preeclampsia_history: false,
+  },
+  {
+    id: 'e0000000-0000-4000-8000-000000000009',
+    user_id: 'd0000000-0000-4000-8000-000000000002',
+    hpht: new Date('2025-09-01T00:00:00.000Z'),
+    hpl: new Date('2026-06-08T00:00:00.000Z'),
+    gravida: 2,
+    existing_conditions: ['riwayat_preeklampsia'],
+    status: PregnancyStatus.nifas,
+    pregnancy_outcome: PregnancyOutcome.persalinan,
+    ended_at: new Date('2026-07-22T08:00:00.000Z'),
+    nifas_start_date: new Date('2026-07-22T00:00:00.000Z'),
+    had_preeclampsia_history: true,
   },
 ] as const;
 
