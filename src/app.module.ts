@@ -9,6 +9,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { FacilitiesModule } from './facilities/facilities.module.js';
+import { FamilyCircleModule } from './family-circle/family-circle.module.js';
 import { PostpartumModule } from './postpartum/postpartum.module.js';
 import { PregnancyProfilesModule } from './pregnancy-profiles/pregnancy-profiles.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -80,6 +81,9 @@ import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.modul
 
     // ─── Structured postpartum check-ins & red-flag evaluation ───
     PostpartumModule,
+
+    // ─── Family notification contacts ───
+    FamilyCircleModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 import {
+  NotifyOn,
   PregnancyOutcome,
   PregnancyStatus,
   PrismaClient,
@@ -141,6 +142,25 @@ const pregnancyProfileSeeds = [
   },
 ] as const;
 
+const familyCircleSeeds = [
+  {
+    id: 'f0000000-0000-4000-8000-000000000001',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    contact_name: 'Budi Rahmawan',
+    contact_phone: '+6281510000001',
+    relation: 'suami',
+    notify_on: NotifyOn.semua_perubahan,
+  },
+  {
+    id: 'f0000000-0000-4000-8000-000000000002',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    contact_name: 'Sri Lestari',
+    contact_phone: '+6281510000002',
+    relation: 'ibu',
+    notify_on: NotifyOn.merah_only,
+  },
+] as const;
+
 async function main() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Seed data dummy tidak boleh dijalankan di production');
@@ -188,25 +208,42 @@ async function main() {
       ),
     );
 
-    const [puskesmasCount, userCount, pregnancyProfileCount] =
-      await Promise.all([
-        prisma.puskesmas.count({
-          where: { id: { in: puskesmasSeeds.map(({ id }) => id) } },
+    await prisma.$transaction(
+      familyCircleSeeds.map(({ id, ...data }) =>
+        prisma.familyCircle.upsert({
+          where: { id },
+          update: data,
+          create: { id, ...data },
         }),
-        prisma.user.count({
-          where: {
-            phone_number: {
-              in: userSeeds.map(({ phone_number }) => phone_number),
-            },
+      ),
+    );
+
+    const [
+      puskesmasCount,
+      userCount,
+      pregnancyProfileCount,
+      familyCircleCount,
+    ] = await Promise.all([
+      prisma.puskesmas.count({
+        where: { id: { in: puskesmasSeeds.map(({ id }) => id) } },
+      }),
+      prisma.user.count({
+        where: {
+          phone_number: {
+            in: userSeeds.map(({ phone_number }) => phone_number),
           },
-        }),
-        prisma.pregnancyProfile.count({
-          where: { id: { in: pregnancyProfileSeeds.map(({ id }) => id) } },
-        }),
-      ]);
+        },
+      }),
+      prisma.pregnancyProfile.count({
+        where: { id: { in: pregnancyProfileSeeds.map(({ id }) => id) } },
+      }),
+      prisma.familyCircle.count({
+        where: { id: { in: familyCircleSeeds.map(({ id }) => id) } },
+      }),
+    ]);
 
     console.log(
-      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan.`,
+      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan, ${familyCircleCount} kontak keluarga.`,
     );
     console.log(`Password seluruh akun dummy: ${SEED_PASSWORD}`);
     console.table(

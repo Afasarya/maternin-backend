@@ -249,6 +249,7 @@ model FamilyCircle {
 
   pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id])
 
+  @@index([pregnancy_profile_id])
   @@map("family_circle")
 }
 

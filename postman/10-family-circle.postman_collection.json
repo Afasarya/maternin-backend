@@ -1,0 +1,464 @@
+{
+  "info": {
+    "name": "10 — Family Circle",
+    "description": "Task 10: CRUD kontak keluarga, pagination, ownership ibu hamil, read access bidan satu wilayah dan admin, serta filter preferensi notifikasi yang diuji pada unit test.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_lain_id",
+      "value": "e0000000-0000-4000-8000-000000000009",
+      "type": "string"
+    },
+    {
+      "key": "seed_family_circle_id",
+      "value": "f0000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "family_circle_id",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    },
+    {
+      "key": "second_family_circle_id",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "CRUD",
+      "item": [
+        {
+          "name": "POST /family-circle — tambah kontak suami",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const contact = pm.response.json().data;",
+                  "pm.expect(contact.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));",
+                  "pm.expect(contact.contact_name).to.eql('Budi Santoso');",
+                  "pm.expect(contact.notify_on).to.eql('semua_perubahan');",
+                  "pm.collectionVariables.set('family_circle_id', contact.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"contact_name\": \"Budi Santoso\",\n  \"contact_phone\": \"+628123456789\",\n  \"relation\": \"suami\",\n  \"notify_on\": \"semua_perubahan\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/family-circle",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle"]
+            }
+          }
+        },
+        {
+          "name": "POST /family-circle — tambah kontak ibu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const contact = pm.response.json().data;",
+                  "pm.expect(contact.relation).to.eql('ibu');",
+                  "pm.expect(contact.notify_on).to.eql('merah_only');",
+                  "pm.collectionVariables.set('second_family_circle_id', contact.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"contact_name\": \"Ibu Sri\",\n  \"contact_phone\": \"+628123456780\",\n  \"relation\": \"ibu\",\n  \"notify_on\": \"merah_only\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/family-circle",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle"]
+            }
+          }
+        },
+        {
+          "name": "GET /family-circle — list per profil",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');",
+                  "pm.expect(result.data.length).to.be.at.most(20);",
+                  "result.data.forEach((contact) => pm.expect(contact.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle?pregnancy_profile_id={{pregnancy_profile_id}}&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /family-circle/:id — owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const contact = pm.response.json().data;",
+                  "pm.expect(contact.id).to.eql(pm.collectionVariables.get('family_circle_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle/{{family_circle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle", "{{family_circle_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /family-circle/:id — update nomor telepon",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const contact = pm.response.json().data;",
+                  "pm.expect(contact.id).to.eql(pm.collectionVariables.get('family_circle_id'));",
+                  "pm.expect(contact.contact_phone).to.eql('+628987654321');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contact_phone\": \"+628987654321\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/family-circle/{{family_circle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle", "{{family_circle_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /family-circle/:id — owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const contact = pm.response.json().data;",
+                  "pm.expect(contact.id).to.eql(pm.collectionVariables.get('family_circle_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle/{{family_circle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle", "{{family_circle_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access Control",
+      "item": [
+        {
+          "name": "POST /family-circle — profil bukan miliknya",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_lain_id}}\",\n  \"contact_name\": \"Kontak Tidak Sah\",\n  \"contact_phone\": \"+628111111111\",\n  \"relation\": \"saudara\",\n  \"notify_on\": \"merah_only\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/family-circle",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle"]
+            }
+          }
+        },
+        {
+          "name": "GET /family-circle — bidan satu wilayah",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle?pregnancy_profile_id={{pregnancy_profile_id}}&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /family-circle — bidan luar wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /family-circle/:id — admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const contact = pm.response.json().data;",
+                  "pm.expect(contact.id).to.eql(pm.collectionVariables.get('seed_family_circle_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle/{{seed_family_circle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle", "{{seed_family_circle_id}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
