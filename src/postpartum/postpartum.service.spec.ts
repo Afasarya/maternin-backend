@@ -7,8 +7,6 @@ import type { Queue } from 'bullmq';
 import {
   BleedingLevel,
   MoodFlag,
-  ReminderStatus,
-  ReminderType,
   UserRole,
   WoundCondition,
 } from '../common/constants/index.js';
@@ -16,6 +14,7 @@ import { AiServiceUnavailableException } from '../common/exceptions/ai-service-u
 import { AiServiceClient } from '../common/services/ai-service.client.js';
 import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RemindersService } from '../reminders/reminders.service.js';
 import { PostpartumLogSort } from './dto/query-postpartum-logs.dto.js';
 import { POSTPARTUM_RETRY_JOB } from './postpartum.constants.js';
 import {
@@ -29,6 +28,10 @@ jest.mock('../prisma/prisma.service.js', () => ({
 
 jest.mock('../pregnancy-profiles/pregnancy-profiles.service.js', () => ({
   PregnancyProfilesService: class PregnancyProfilesService {},
+}));
+
+jest.mock('../reminders/reminders.service.js', () => ({
+  RemindersService: class RemindersService {},
 }));
 
 describe('PostpartumService', () => {
@@ -94,9 +97,6 @@ describe('PostpartumService', () => {
       count: jest.fn(),
       update: jest.fn(),
     },
-    reminder: {
-      upsert: jest.fn(),
-    },
     $transaction: jest.fn(),
   };
   const aiServiceClient = {
@@ -105,6 +105,9 @@ describe('PostpartumService', () => {
   const pregnancyProfilesService = {
     findOne: jest.fn(),
   };
+  const remindersService = {
+    createPostpartumReminder: jest.fn(),
+  };
   const postpartumRetryQueue = {
     add: jest.fn(),
   };
@@ -112,6 +115,7 @@ describe('PostpartumService', () => {
     prisma as unknown as PrismaService,
     aiServiceClient as unknown as AiServiceClient,
     pregnancyProfilesService as unknown as PregnancyProfilesService,
+    remindersService as unknown as RemindersService,
     postpartumRetryQueue as unknown as Queue<PostpartumRetryJobData>,
   );
 
@@ -120,9 +124,15 @@ describe('PostpartumService', () => {
     pregnancyProfilesService.findOne.mockResolvedValue(profile);
     prisma.postpartumLog.findFirst.mockResolvedValue(null);
     prisma.postpartumLog.create.mockResolvedValue(log);
-    prisma.reminder.upsert.mockResolvedValue({ id: 'reminder-id' });
+    remindersService.createPostpartumReminder.mockResolvedValue({
+      id: 'reminder-id',
+    });
     prisma.$transaction.mockImplementation(
-      async (operations: Array<Promise<unknown>>) => Promise.all(operations),
+      async (
+        input:
+          | Array<Promise<unknown>>
+          | ((transaction: typeof prisma) => Promise<unknown>),
+      ) => (typeof input === 'function' ? input(prisma) : Promise.all(input)),
     );
   });
 
@@ -163,48 +173,33 @@ describe('PostpartumService', () => {
         evaluated_at: expect.any(Date) as Date,
       },
     });
-    expect(prisma.reminder.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          cadence_days: 1,
-          status: ReminderStatus.ACTIVE,
-        }) as object,
-        update: expect.objectContaining({ cadence_days: 1 }) as object,
-      }),
+    expect(remindersService.createPostpartumReminder).toHaveBeenCalledWith(
+      profileId,
+      3,
+      prisma,
     );
   });
 
-  it.each([
-    [1, 1],
-    [3, 1],
-    [4, 2],
-    [14, 2],
-    [15, 7],
-    [42, 7],
-  ])('sets day %i postpartum cadence to %i days', async (day, cadence) => {
-    const currentLog = { ...log, day_number: day };
-    prisma.postpartumLog.create.mockResolvedValue(currentLog);
-    prisma.postpartumLog.findUnique.mockResolvedValue(currentLog);
-    aiServiceClient.evaluatePostpartum.mockRejectedValue(
-      new AiServiceUnavailableException(),
-    );
-    postpartumRetryQueue.add.mockResolvedValue({ id: logId });
+  it.each([1, 3, 4, 14, 15, 42])(
+    'delegates day %i postpartum cadence to reminders',
+    async (day) => {
+      const currentLog = { ...log, day_number: day };
+      prisma.postpartumLog.create.mockResolvedValue(currentLog);
+      prisma.postpartumLog.findUnique.mockResolvedValue(currentLog);
+      aiServiceClient.evaluatePostpartum.mockRejectedValue(
+        new AiServiceUnavailableException(),
+      );
+      postpartumRetryQueue.add.mockResolvedValue({ id: logId });
 
-    await service.create({ ...dto, day_number: day }, owner, requestId);
+      await service.create({ ...dto, day_number: day }, owner, requestId);
 
-    expect(prisma.reminder.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          pregnancy_profile_id_reminder_type: {
-            pregnancy_profile_id: profileId,
-            reminder_type: ReminderType.POSTPARTUM_CHECKIN,
-          },
-        },
-        create: expect.objectContaining({ cadence_days: cadence }) as object,
-        update: expect.objectContaining({ cadence_days: cadence }) as object,
-      }),
-    );
-  });
+      expect(remindersService.createPostpartumReminder).toHaveBeenCalledWith(
+        profileId,
+        day,
+        prisma,
+      );
+    },
+  );
 
   it('returns processing and queues retry when AI is unavailable', async () => {
     prisma.postpartumLog.findUnique.mockResolvedValue(log);

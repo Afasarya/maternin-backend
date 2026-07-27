@@ -6,9 +6,12 @@ import {
 import {
   PregnancyOutcome,
   PregnancyStatus,
+  ReminderType,
+  RiskBadge,
   UserRole,
 } from '../common/constants/index.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RemindersService } from '../reminders/reminders.service.js';
 import { UsersService } from '../users/users.service.js';
 import { PregnancyProfilesService } from './pregnancy-profiles.service.js';
 
@@ -18,6 +21,10 @@ jest.mock('../prisma/prisma.service.js', () => ({
 
 jest.mock('../users/users.service.js', () => ({
   UsersService: class UsersService {},
+}));
+
+jest.mock('../reminders/reminders.service.js', () => ({
+  RemindersService: class RemindersService {},
 }));
 
 describe('PregnancyProfilesService', () => {
@@ -67,15 +74,24 @@ describe('PregnancyProfilesService', () => {
   const usersService = {
     findById: jest.fn(),
   };
+  const remindersService = {
+    createAncReminder: jest.fn(),
+    completeProfileReminders: jest.fn(),
+  };
   const service = new PregnancyProfilesService(
     prisma as unknown as PrismaService,
     usersService as unknown as UsersService,
+    remindersService as unknown as RemindersService,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.$transaction.mockImplementation(
-      async (operations: Array<Promise<unknown>>) => Promise.all(operations),
+      async (
+        input:
+          | Array<Promise<unknown>>
+          | ((transaction: typeof prisma) => Promise<unknown>),
+      ) => (typeof input === 'function' ? input(prisma) : Promise.all(input)),
     );
   });
 
@@ -105,6 +121,11 @@ describe('PregnancyProfilesService', () => {
           had_preeclampsia_history: false,
         },
       });
+      expect(remindersService.createAncReminder).toHaveBeenCalledWith(
+        profileId,
+        RiskBadge.HIJAU,
+        prisma,
+      );
     });
 
     it('allows a bidan to create a profile for a patient in their region', async () => {
@@ -291,6 +312,7 @@ describe('PregnancyProfilesService', () => {
         },
         include: { user: { select: profileUserSelect } },
       });
+      expect(remindersService.completeProfileReminders).not.toHaveBeenCalled();
     });
   });
 
@@ -328,6 +350,11 @@ describe('PregnancyProfilesService', () => {
         },
         include: { user: { select: profileUserSelect } },
       });
+      expect(remindersService.completeProfileReminders).toHaveBeenCalledWith(
+        profileId,
+        ReminderType.ANC_CHECKUP,
+        prisma,
+      );
     });
 
     it('allows explicit hamil to nifas for keguguran without inferring a medical threshold', async () => {
@@ -363,6 +390,11 @@ describe('PregnancyProfilesService', () => {
         },
         include: { user: { select: profileUserSelect } },
       });
+      expect(remindersService.completeProfileReminders).toHaveBeenCalledWith(
+        profileId,
+        ReminderType.ANC_CHECKUP,
+        prisma,
+      );
     });
 
     it('allows explicit hamil to selesai for keguguran', async () => {
@@ -396,6 +428,11 @@ describe('PregnancyProfilesService', () => {
         },
         include: { user: { select: profileUserSelect } },
       });
+      expect(remindersService.completeProfileReminders).toHaveBeenCalledWith(
+        profileId,
+        undefined,
+        prisma,
+      );
     });
 
     it('requires an outcome when leaving hamil status', async () => {
@@ -463,6 +500,11 @@ describe('PregnancyProfilesService', () => {
         data: { status: PregnancyStatus.SELESAI },
         include: { user: { select: profileUserSelect } },
       });
+      expect(remindersService.completeProfileReminders).toHaveBeenCalledWith(
+        profileId,
+        undefined,
+        prisma,
+      );
     });
 
     it('rejects changing pregnancy outcome when nifas becomes selesai', async () => {

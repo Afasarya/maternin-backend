@@ -3,14 +3,10 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ReminderStatus,
-  ReminderType,
-  RiskBadge,
-  UserRole,
-} from '../common/constants/index.js';
+import { RiskBadge, UserRole } from '../common/constants/index.js';
 import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RemindersService } from '../reminders/reminders.service.js';
 import { RiskAssessmentsCacheService } from './risk-assessments-cache.service.js';
 import { RiskAssessmentsService } from './risk-assessments.service.js';
 
@@ -24,6 +20,10 @@ jest.mock('../pregnancy-profiles/pregnancy-profiles.service.js', () => ({
 
 jest.mock('./risk-assessments-cache.service.js', () => ({
   RiskAssessmentsCacheService: class RiskAssessmentsCacheService {},
+}));
+
+jest.mock('../reminders/reminders.service.js', () => ({
+  RemindersService: class RemindersService {},
 }));
 
 describe('RiskAssessmentsService', () => {
@@ -80,9 +80,6 @@ describe('RiskAssessmentsService', () => {
       count: jest.fn(),
       create: jest.fn(),
     },
-    reminder: {
-      updateMany: jest.fn(),
-    },
     $transaction: jest.fn(),
   };
   const pregnancyProfilesService = {
@@ -94,10 +91,14 @@ describe('RiskAssessmentsService', () => {
     setIfVersion: jest.fn(),
     invalidate: jest.fn(),
   };
+  const remindersService = {
+    updateCadenceOnNewAssessment: jest.fn(),
+  };
   const service = new RiskAssessmentsService(
     prisma as unknown as PrismaService,
     pregnancyProfilesService as unknown as PregnancyProfilesService,
     cache as unknown as RiskAssessmentsCacheService,
+    remindersService as unknown as RemindersService,
   );
 
   beforeEach(() => {
@@ -115,67 +116,66 @@ describe('RiskAssessmentsService', () => {
     });
     prisma.riskAssessment.findFirst.mockResolvedValue(null);
     prisma.riskAssessment.create.mockResolvedValue(assessment);
-    prisma.reminder.updateMany.mockResolvedValue({ count: 1 });
+    remindersService.updateCadenceOnNewAssessment.mockResolvedValue({
+      count: 1,
+    });
     cache.getVersion.mockResolvedValue('0');
     cache.setIfVersion.mockResolvedValue(true);
     prisma.$transaction.mockImplementation(
-      async (operations: Array<Promise<unknown>>) => Promise.all(operations),
+      async (
+        input:
+          | Array<Promise<unknown>>
+          | ((transaction: typeof prisma) => Promise<unknown>),
+      ) => (typeof input === 'function' ? input(prisma) : Promise.all(input)),
     );
   });
 
   describe('create', () => {
-    it.each([
-      [RiskBadge.MERAH, 3],
-      [RiskBadge.KUNING, 7],
-      [RiskBadge.HIJAU, 14],
-    ])('persists %s callback and updates ANC cadence', async (badge, days) => {
-      jest.useFakeTimers().setSystemTime(new Date('2026-07-24T10:00:00.000Z'));
-      prisma.riskAssessment.create.mockResolvedValue({
-        ...assessment,
-        risk_badge: badge,
-      });
-
-      try {
-        await expect(
-          service.createFromCallback({ ...callbackDto, risk_badge: badge }),
-        ).resolves.toEqual({
-          assessment: { ...assessment, risk_badge: badge },
-          created: true,
+    it.each([RiskBadge.MERAH, RiskBadge.KUNING, RiskBadge.HIJAU])(
+      'persists %s callback and updates ANC cadence',
+      async (badge) => {
+        jest
+          .useFakeTimers()
+          .setSystemTime(new Date('2026-07-24T10:00:00.000Z'));
+        prisma.riskAssessment.create.mockResolvedValue({
+          ...assessment,
+          risk_badge: badge,
         });
 
-        expect(prisma.riskAssessment.create).toHaveBeenCalledWith({
-          data: {
-            pregnancy_profile_id: profileId,
-            symptom_checkin_id: checkinId,
-            triage_score: 75,
-            anemia_probability: 0.3,
-            preeclampsia_probability: 0.8,
-            aggregate_score: 84,
-            risk_badge: badge,
-            risk_factors: ['Tekanan darah tinggi'],
-            recommendation_text: 'Segera ke fasilitas kesehatan',
-          },
-        });
-        expect(prisma.reminder.updateMany).toHaveBeenCalledWith({
-          where: {
-            pregnancy_profile_id: profileId,
-            reminder_type: ReminderType.ANC_CHECKUP,
-            status: ReminderStatus.ACTIVE,
-          },
-          data: {
-            cadence_days: days,
-            next_trigger_at: new Date(Date.UTC(2026, 6, 24 + days, 10, 0, 0)),
-          },
-        });
-        expect(cache.invalidate).toHaveBeenCalledWith(
-          `risk:latest:version:${profileId}`,
-          `risk:latest:${profileId}`,
-          `bidan:patients:${puskesmasId}`,
-        );
-      } finally {
-        jest.useRealTimers();
-      }
-    });
+        try {
+          await expect(
+            service.createFromCallback({ ...callbackDto, risk_badge: badge }),
+          ).resolves.toEqual({
+            assessment: { ...assessment, risk_badge: badge },
+            created: true,
+          });
+
+          expect(prisma.riskAssessment.create).toHaveBeenCalledWith({
+            data: {
+              pregnancy_profile_id: profileId,
+              symptom_checkin_id: checkinId,
+              triage_score: 75,
+              anemia_probability: 0.3,
+              preeclampsia_probability: 0.8,
+              aggregate_score: 84,
+              risk_badge: badge,
+              risk_factors: ['Tekanan darah tinggi'],
+              recommendation_text: 'Segera ke fasilitas kesehatan',
+            },
+          });
+          expect(
+            remindersService.updateCadenceOnNewAssessment,
+          ).toHaveBeenCalledWith(profileId, badge, prisma);
+          expect(cache.invalidate).toHaveBeenCalledWith(
+            `risk:latest:version:${profileId}`,
+            `risk:latest:${profileId}`,
+            `bidan:patients:${puskesmasId}`,
+          );
+        } finally {
+          jest.useRealTimers();
+        }
+      },
+    );
 
     it('persists a successful synchronous AI response', async () => {
       prisma.riskAssessment.findFirst.mockResolvedValue(null);
@@ -233,7 +233,9 @@ describe('RiskAssessmentsService', () => {
       });
 
       expect(prisma.riskAssessment.create).not.toHaveBeenCalled();
-      expect(prisma.reminder.updateMany).not.toHaveBeenCalled();
+      expect(
+        remindersService.updateCadenceOnNewAssessment,
+      ).not.toHaveBeenCalled();
     });
 
     it('returns the concurrent unique-constraint winner', async () => {

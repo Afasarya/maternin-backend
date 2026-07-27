@@ -1,0 +1,566 @@
+{
+  "info": {
+    "name": "12 — Notifications",
+    "description": "Task 12: histori notifikasi Fonnte, pagination, filter channel/status, detail log, dan access control. Kader ditolak karena log notifikasi dapat mengungkap data klinis/intensitas risiko. Collection ini tidak mengirim WhatsApp nyata.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_kader",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "notification_log_id",
+      "value": "80000000-0000-4000-8000-000000000001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "History",
+      "item": [
+        {
+          "name": "GET /notifications — paginated history",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');",
+                  "pm.expect(result.data.length).to.be.at.most(20);",
+                  "result.data.forEach((notification) => pm.expect(notification.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id')));",
+                  "if (result.data.length > 0) pm.collectionVariables.set('notification_log_id', result.data[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?pregnancy_profile_id={{pregnancy_profile_id}}&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications — filter wa_patient",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.test('Hanya wa_patient sent dengan sent_at terisi', () => {",
+                  "  pm.expect(result.data).to.be.an('array').and.not.empty;",
+                  "  result.data.forEach((notification) => {",
+                  "    pm.expect(notification.channel).to.eql('wa_patient');",
+                  "    pm.expect(notification.status).to.eql('sent');",
+                  "    pm.expect(notification.sent_at).to.not.eql(null);",
+                  "  });",
+                  "});",
+                  "pm.collectionVariables.set('notification_log_id', result.data[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?pregnancy_profile_id={{pregnancy_profile_id}}&channel=wa_patient&status=sent",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "channel",
+                  "value": "wa_patient"
+                },
+                {
+                  "key": "status",
+                  "value": "sent"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications — filter failed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.test('Semua status failed memiliki sent_at null', () => {",
+                  "  pm.expect(result.data).to.be.an('array').and.not.empty;",
+                  "  result.data.forEach((notification) => {",
+                  "    pm.expect(notification.status).to.eql('failed');",
+                  "    pm.expect(notification.sent_at).to.eql(null);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?pregnancy_profile_id={{pregnancy_profile_id}}&status=failed",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "status",
+                  "value": "failed"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications — filter wa_bidan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.test('Filter hanya mengembalikan wa_bidan', () => {",
+                  "  pm.expect(result.data).to.be.an('array').and.not.empty;",
+                  "  result.data.forEach((notification) => pm.expect(notification.channel).to.eql('wa_bidan'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?pregnancy_profile_id={{pregnancy_profile_id}}&channel=wa_bidan",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "channel",
+                  "value": "wa_bidan"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications — filter wa_family",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.test('Filter hanya mengembalikan wa_family', () => {",
+                  "  pm.expect(result.data).to.be.an('array').and.not.empty;",
+                  "  result.data.forEach((notification) => pm.expect(notification.channel).to.eql('wa_family'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?pregnancy_profile_id={{pregnancy_profile_id}}&channel=wa_family",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "channel",
+                  "value": "wa_family"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications/:id — owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const notification = pm.response.json().data;",
+                  "pm.expect(notification.id).to.eql(pm.collectionVariables.get('notification_log_id'));",
+                  "pm.expect(notification.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_log_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notification_log_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications/:id — admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const notification = pm.response.json().data;",
+                  "pm.expect(notification.id).to.eql(pm.collectionVariables.get('notification_log_id'));",
+                  "pm.expect(notification.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_log_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notification_log_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access Control",
+      "description": "Kader ditolak konsisten dengan Task 09 dan 11 karena isi/status notifikasi dapat mengungkap data klinis dan intensitas risiko.",
+      "item": [
+        {
+          "name": "GET /notifications — ibu lain ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications/:id — ibu lain ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_log_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notification_log_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications — bidan luar wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications/:id — bidan luar wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_log_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notification_log_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications — kader ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications/:id — kader ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_log_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notification_log_id}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

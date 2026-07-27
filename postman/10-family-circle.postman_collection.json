@@ -346,6 +346,80 @@
           }
         },
         {
+          "name": "GET /family-circle — ibu lain ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle?pregnancy_profile_id={{pregnancy_profile_id}}&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /family-circle/:id — ibu lain ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle/{{seed_family_circle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle", "{{seed_family_circle_id}}"]
+            }
+          }
+        },
+        {
           "name": "GET /family-circle — bidan satu wilayah",
           "event": [
             {
@@ -424,6 +498,136 @@
                   "value": "{{pregnancy_profile_id}}"
                 }
               ]
+            }
+          }
+        },
+        {
+          "name": "GET /family-circle/:id — bidan satu wilayah",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const contact = pm.response.json().data;",
+                  "pm.expect(contact.id).to.eql(pm.collectionVariables.get('seed_family_circle_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle/{{seed_family_circle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle", "{{seed_family_circle_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /family-circle/:id — bidan luar wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle/{{seed_family_circle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle", "{{seed_family_circle_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /family-circle/:id — ibu lain ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contact_phone\": \"+628111111111\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/family-circle/{{seed_family_circle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle", "{{seed_family_circle_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /family-circle/:id — ibu lain ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/family-circle/{{seed_family_circle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["family-circle", "{{seed_family_circle_id}}"]
             }
           }
         },

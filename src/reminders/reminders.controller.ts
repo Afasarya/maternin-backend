@@ -1,12 +1,9 @@
 import {
-  Body,
   Controller,
-  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
-  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -15,32 +12,21 @@ import type { CurrentUserData } from '../common/decorators/current-user.decorato
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
-import { CreateFamilyCircleDto } from './dto/create-family-circle.dto.js';
-import { QueryFamilyCircleDto } from './dto/query-family-circle.dto.js';
-import { UpdateFamilyCircleDto } from './dto/update-family-circle.dto.js';
-import { FamilyCircleService } from './family-circle.service.js';
+import { QueryRemindersDto } from './dto/query-reminders.dto.js';
+import { RemindersService } from './reminders.service.js';
 
-@Controller('family-circle')
+@Controller('reminders')
 @UseGuards(JwtAuthGuard, RolesGuard)
-export class FamilyCircleController {
-  constructor(private readonly familyCircleService: FamilyCircleService) {}
-
-  @Post()
-  @Roles('ibu_hamil')
-  create(
-    @Body() dto: CreateFamilyCircleDto,
-    @CurrentUser() requester: CurrentUserData,
-  ) {
-    return this.familyCircleService.create(dto, requester);
-  }
+export class RemindersController {
+  constructor(private readonly remindersService: RemindersService) {}
 
   @Get()
   @Roles('ibu_hamil', 'bidan', 'admin')
   findByProfile(
-    @Query() query: QueryFamilyCircleDto,
+    @Query() query: QueryRemindersDto,
     @CurrentUser() requester: CurrentUserData,
   ) {
-    return this.familyCircleService.findByProfile(
+    return this.remindersService.findByProfile(
       query.pregnancy_profile_id,
       query,
       requester,
@@ -53,25 +39,24 @@ export class FamilyCircleController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() requester: CurrentUserData,
   ) {
-    return this.familyCircleService.findOne(id, requester);
+    return this.remindersService.findOne(id, requester);
   }
 
-  @Patch(':id')
-  @Roles('ibu_hamil')
-  update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateFamilyCircleDto,
-    @CurrentUser() requester: CurrentUserData,
-  ) {
-    return this.familyCircleService.update(id, dto, requester);
-  }
-
-  @Delete(':id')
-  @Roles('ibu_hamil')
-  remove(
+  @Patch(':id/pause')
+  @Roles('bidan', 'admin')
+  pause(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() requester: CurrentUserData,
   ) {
-    return this.familyCircleService.remove(id, requester);
+    return this.remindersService.pauseReminder(id, requester);
+  }
+
+  @Patch(':id/resume')
+  @Roles('bidan', 'admin')
+  resume(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() requester: CurrentUserData,
+  ) {
+    return this.remindersService.resumeReminder(id, requester);
   }
 }

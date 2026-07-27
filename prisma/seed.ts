@@ -2,10 +2,14 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 import {
+  NotificationChannel,
+  NotificationStatus,
   NotifyOn,
   PregnancyOutcome,
   PregnancyStatus,
   PrismaClient,
+  ReminderStatus,
+  ReminderType,
   UserRole,
 } from '../generated/prisma/client.js';
 
@@ -140,6 +144,15 @@ const pregnancyProfileSeeds = [
     nifas_start_date: new Date('2026-07-22T00:00:00.000Z'),
     had_preeclampsia_history: true,
   },
+  {
+    id: 'e0000000-0000-4000-8000-000000000003',
+    user_id: 'd0000000-0000-4000-8000-000000000003',
+    hpht: new Date('2026-06-15T00:00:00.000Z'),
+    hpl: new Date('2027-03-22T00:00:00.000Z'),
+    gravida: 1,
+    existing_conditions: [],
+    had_preeclampsia_history: false,
+  },
 ] as const;
 
 const familyCircleSeeds = [
@@ -158,6 +171,62 @@ const familyCircleSeeds = [
     contact_phone: '+6281510000002',
     relation: 'ibu',
     notify_on: NotifyOn.merah_only,
+  },
+] as const;
+
+const reminderSeeds = [
+  {
+    id: '70000000-0000-4000-8000-000000000001',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    reminder_type: ReminderType.anc_checkup,
+    cadence_days: 14,
+    next_trigger_at: new Date('2026-08-08T00:00:00.000Z'),
+    status: ReminderStatus.active,
+  },
+  {
+    id: '70000000-0000-4000-8000-000000000002',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000009',
+    reminder_type: ReminderType.postpartum_checkin,
+    cadence_days: 1,
+    next_trigger_at: new Date('2026-07-26T00:00:00.000Z'),
+    status: ReminderStatus.active,
+  },
+  {
+    id: '70000000-0000-4000-8000-000000000003',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000003',
+    reminder_type: ReminderType.anc_checkup,
+    cadence_days: 14,
+    next_trigger_at: new Date('2026-08-08T00:00:00.000Z'),
+    status: ReminderStatus.active,
+  },
+] as const;
+
+const notificationLogSeeds = [
+  {
+    id: '80000000-0000-4000-8000-000000000001',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    channel: NotificationChannel.wa_patient,
+    message:
+      'Halo Siti Rahmawati, waktunya pemeriksaan kehamilan rutin Anda.',
+    status: NotificationStatus.sent,
+    sent_at: new Date('2026-07-26T08:00:00.000Z'),
+  },
+  {
+    id: '80000000-0000-4000-8000-000000000002',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    channel: NotificationChannel.wa_family,
+    message: '[MaternIn] Update kondisi Siti Rahmawati: status risiko kuning.',
+    status: NotificationStatus.failed,
+    sent_at: null,
+  },
+  {
+    id: '80000000-0000-4000-8000-000000000003',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    channel: NotificationChannel.wa_bidan,
+    message:
+      '[MaternIn] Pasien Siti Rahmawati memiliki status risiko kuning.',
+    status: NotificationStatus.sent,
+    sent_at: new Date('2026-07-26T08:05:00.000Z'),
   },
 ] as const;
 
@@ -218,11 +287,38 @@ async function main() {
       ),
     );
 
+    await prisma.$transaction(
+      reminderSeeds.map(({ id, ...data }) =>
+        prisma.reminder.upsert({
+          where: {
+            pregnancy_profile_id_reminder_type: {
+              pregnancy_profile_id: data.pregnancy_profile_id,
+              reminder_type: data.reminder_type,
+            },
+          },
+          update: data,
+          create: { id, ...data },
+        }),
+      ),
+    );
+
+    await prisma.$transaction(
+      notificationLogSeeds.map(({ id, ...data }) =>
+        prisma.notificationLog.upsert({
+          where: { id },
+          update: data,
+          create: { id, ...data },
+        }),
+      ),
+    );
+
     const [
       puskesmasCount,
       userCount,
       pregnancyProfileCount,
       familyCircleCount,
+      reminderCount,
+      notificationLogCount,
     ] = await Promise.all([
       prisma.puskesmas.count({
         where: { id: { in: puskesmasSeeds.map(({ id }) => id) } },
@@ -240,10 +336,21 @@ async function main() {
       prisma.familyCircle.count({
         where: { id: { in: familyCircleSeeds.map(({ id }) => id) } },
       }),
+      prisma.reminder.count({
+        where: {
+          OR: reminderSeeds.map(({ pregnancy_profile_id, reminder_type }) => ({
+            pregnancy_profile_id,
+            reminder_type,
+          })),
+        },
+      }),
+      prisma.notificationLog.count({
+        where: { id: { in: notificationLogSeeds.map(({ id }) => id) } },
+      }),
     ]);
 
     console.log(
-      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan, ${familyCircleCount} kontak keluarga.`,
+      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan, ${familyCircleCount} kontak keluarga, ${reminderCount} reminder, ${notificationLogCount} log notifikasi.`,
     );
     console.log(`Password seluruh akun dummy: ${SEED_PASSWORD}`);
     console.table(

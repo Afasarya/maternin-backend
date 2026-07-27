@@ -1,0 +1,746 @@
+{
+  "info": {
+    "name": "11 — Reminders",
+    "description": "Task 11: reminder ANC dan postpartum, pagination, filter, ownership/wilayah, serta pause/resume. Scheduler BullMQ berjalan setiap jam. Pengiriman WhatsApp tetap scope Task 12.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_kader",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_lain_id",
+      "value": "e0000000-0000-4000-8000-000000000009",
+      "type": "string"
+    },
+    {
+      "key": "anc_reminder_id",
+      "value": "70000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "postpartum_reminder_id",
+      "value": "70000000-0000-4000-8000-000000000002",
+      "type": "string"
+    },
+    {
+      "key": "cross_region_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000003",
+      "type": "string"
+    },
+    {
+      "key": "cross_region_reminder_id",
+      "value": "70000000-0000-4000-8000-000000000003",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Read",
+      "item": [
+        {
+          "name": "GET /reminders — list reminder ANC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');",
+                  "pm.expect(result.data.length).to.be.at.most(20);",
+                  "result.data.forEach((reminder) => {",
+                  "  pm.expect(reminder.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));",
+                  "  pm.expect(reminder.reminder_type).to.eql('anc_checkup');",
+                  "});",
+                  "if (result.data.length > 0) pm.collectionVariables.set('anc_reminder_id', result.data[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders?pregnancy_profile_id={{pregnancy_profile_id}}&reminder_type=anc_checkup&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["reminders"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "reminder_type",
+                  "value": "anc_checkup"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders — filter active",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "result.data.forEach((reminder) => pm.expect(reminder.status).to.eql('active'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders?pregnancy_profile_id={{pregnancy_profile_id}}&status=active",
+              "host": ["{{base_url}}"],
+              "path": ["reminders"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                },
+                {
+                  "key": "status",
+                  "value": "active"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders/:id — owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const reminder = pm.response.json().data;",
+                  "pm.expect(reminder.id).to.eql(pm.collectionVariables.get('anc_reminder_id'));",
+                  "pm.expect(reminder.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{anc_reminder_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{anc_reminder_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders — admin menemukan reminder postpartum",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array').and.not.empty;",
+                  "const reminder = result.data.find((item) => item.reminder_type === 'postpartum_checkin');",
+                  "pm.expect(reminder).to.exist;",
+                  "pm.collectionVariables.set('postpartum_reminder_id', reminder.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders?pregnancy_profile_id={{pregnancy_profile_lain_id}}&reminder_type=postpartum_checkin&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["reminders"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_lain_id}}"
+                },
+                {
+                  "key": "reminder_type",
+                  "value": "postpartum_checkin"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders/:id — admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('postpartum_reminder_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{postpartum_reminder_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{postpartum_reminder_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Manage",
+      "item": [
+        {
+          "name": "PATCH /reminders/:id/pause — bidan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const reminder = pm.response.json().data;",
+                  "pm.expect(reminder.id).to.eql(pm.collectionVariables.get('anc_reminder_id'));",
+                  "pm.expect(reminder.status).to.eql('paused');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{anc_reminder_id}}/pause",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{anc_reminder_id}}", "pause"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /reminders/:id/resume — bidan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const reminder = pm.response.json().data;",
+                  "pm.expect(reminder.id).to.eql(pm.collectionVariables.get('anc_reminder_id'));",
+                  "pm.expect(reminder.status).to.eql('active');",
+                  "pm.expect(new Date(reminder.next_trigger_at).getTime()).to.be.above(Date.now());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{anc_reminder_id}}/resume",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{anc_reminder_id}}", "resume"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /reminders/:id/pause — admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.status).to.eql('paused');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{postpartum_reminder_id}}/pause",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{postpartum_reminder_id}}", "pause"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /reminders/:id/resume — admin cleanup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.status).to.eql('active');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{postpartum_reminder_id}}/resume",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{postpartum_reminder_id}}", "resume"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access Control & Validation",
+      "item": [
+        {
+          "name": "GET /reminders — ibu lain ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["reminders"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders — bidan luar wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["reminders"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders/:id — ibu lain ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{anc_reminder_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{anc_reminder_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders/:id — bidan luar wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{anc_reminder_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{anc_reminder_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders — admin membaca profil lintas wilayah",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array').and.not.empty;",
+                  "pm.expect(result.total).to.be.at.least(1);",
+                  "result.data.forEach((reminder) => pm.expect(reminder.pregnancy_profile_id).to.eql(pm.collectionVariables.get('cross_region_profile_id')));",
+                  "pm.expect(result.data.map((reminder) => reminder.id)).to.include(pm.collectionVariables.get('cross_region_reminder_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders?pregnancy_profile_id={{cross_region_profile_id}}&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["reminders"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{cross_region_profile_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders — kader ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["reminders"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "{{pregnancy_profile_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders/:id — kader satu wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{anc_reminder_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{anc_reminder_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /reminders/:id/pause — ibu ditolak role guard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders/{{anc_reminder_id}}/pause",
+              "host": ["{{base_url}}"],
+              "path": ["reminders", "{{anc_reminder_id}}", "pause"]
+            }
+          }
+        },
+        {
+          "name": "GET /reminders — query invalid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reminders?pregnancy_profile_id=not-a-uuid&status=invalid&limit=101",
+              "host": ["{{base_url}}"],
+              "path": ["reminders"],
+              "query": [
+                {
+                  "key": "pregnancy_profile_id",
+                  "value": "not-a-uuid"
+                },
+                {
+                  "key": "status",
+                  "value": "invalid"
+                },
+                {
+                  "key": "limit",
+                  "value": "101"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

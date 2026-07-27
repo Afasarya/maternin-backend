@@ -4,15 +4,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { RiskAssessment } from '../../generated/prisma/client.js';
-import {
-  ReminderStatus,
-  ReminderType,
-  RiskBadge,
-} from '../common/constants/index.js';
+import { RiskBadge } from '../common/constants/index.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import type { TriageAnalysisResponse } from '../common/services/ai-service.client.js';
 import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RemindersService } from '../reminders/reminders.service.js';
 import { CreateRiskAssessmentInternalDto } from './dto/create-risk-assessment-internal.dto.js';
 import { RiskAssessmentsCacheService } from './risk-assessments-cache.service.js';
 
@@ -60,6 +57,7 @@ export class RiskAssessmentsService {
     private readonly prisma: PrismaService,
     private readonly pregnancyProfilesService: PregnancyProfilesService,
     private readonly cache: RiskAssessmentsCacheService,
+    private readonly remindersService: RemindersService,
   ) {}
 
   createFromCallback(
@@ -202,13 +200,11 @@ export class RiskAssessmentsService {
       }
     }
 
-    const cadenceDays = this.cadenceDays(input.risk_badge);
-    const nextTriggerAt = this.addDays(new Date(), cadenceDays);
     let assessment: RiskAssessment;
 
     try {
-      [assessment] = await this.prisma.$transaction([
-        this.prisma.riskAssessment.create({
+      assessment = await this.prisma.$transaction(async (transaction) => {
+        const createdAssessment = await transaction.riskAssessment.create({
           data: {
             pregnancy_profile_id: input.pregnancy_profile_id,
             symptom_checkin_id: input.symptom_checkin_id,
@@ -220,19 +216,16 @@ export class RiskAssessmentsService {
             risk_factors: input.risk_factors,
             recommendation_text: input.recommendation_text,
           },
-        }),
-        this.prisma.reminder.updateMany({
-          where: {
-            pregnancy_profile_id: input.pregnancy_profile_id,
-            reminder_type: ReminderType.ANC_CHECKUP,
-            status: ReminderStatus.ACTIVE,
-          },
-          data: {
-            cadence_days: cadenceDays,
-            next_trigger_at: nextTriggerAt,
-          },
-        }),
-      ]);
+        });
+
+        await this.remindersService.updateCadenceOnNewAssessment(
+          input.pregnancy_profile_id,
+          input.risk_badge,
+          transaction,
+        );
+
+        return createdAssessment;
+      });
     } catch (error: unknown) {
       if (input.symptom_checkin_id && isUniqueConstraintError(error)) {
         const winner = await this.findBySymptomCheckin(
@@ -257,23 +250,6 @@ export class RiskAssessmentsService {
     );
 
     return { assessment, created: true };
-  }
-
-  private cadenceDays(riskBadge: RiskBadge) {
-    switch (riskBadge) {
-      case RiskBadge.MERAH:
-        return 3;
-      case RiskBadge.KUNING:
-        return 7;
-      case RiskBadge.HIJAU:
-        return 14;
-    }
-  }
-
-  private addDays(date: Date, days: number) {
-    const result = new Date(date);
-    result.setUTCDate(result.getUTCDate() + days);
-    return result;
   }
 
   private invalidateCaches(profileId: string, puskesmasId: string | null) {

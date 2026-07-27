@@ -432,7 +432,7 @@ Request `POST /sync/batch`:
 |---|---|
 | `ibu_hamil` | CRUD data miliknya sendiri saja |
 | `bidan` | Read semua pasien di `puskesmas_id`-nya, write visit brief request, akses laporan |
-| `kader` | Write via sync batch, TIDAK bisa akses data klinis sensitif pasien lain |
+| `kader` | Write via sync batch, TIDAK bisa akses data klinis sensitif pasien lain; tidak dapat membaca daftar maupun detail reminder karena jenis dan cadence reminder mengungkap fase/intensitas risiko klinis |
 | `admin` | Full access buat demo/testing |
 
 Implementasi: `@Roles('bidan')` decorator + `RolesGuard`, cek `req.user.role` dari JWT payload.

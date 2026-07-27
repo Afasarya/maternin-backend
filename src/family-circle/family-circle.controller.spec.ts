@@ -215,7 +215,7 @@ describe('FamilyCircleController', () => {
         // eslint-disable-next-line @typescript-eslint/unbound-method
         FamilyCircleController.prototype.findOne,
       ),
-    ).toEqual(['ibu_hamil', 'admin']);
+    ).toEqual(['ibu_hamil', 'bidan', 'admin']);
     expect(
       Reflect.getMetadata(
         'roles',

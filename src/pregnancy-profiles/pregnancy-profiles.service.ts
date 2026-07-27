@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,10 +10,13 @@ import { Prisma } from '../../generated/prisma/client.js';
 import {
   PregnancyOutcome,
   PregnancyStatus,
+  ReminderType,
+  RiskBadge,
   UserRole,
 } from '../common/constants/index.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RemindersService } from '../reminders/reminders.service.js';
 import { UsersService } from '../users/users.service.js';
 import { CreatePregnancyProfileDto } from './dto/create-pregnancy-profile.dto.js';
 import { QueryPregnancyProfilesDto } from './dto/query-pregnancy-profiles.dto.js';
@@ -34,6 +39,8 @@ export class PregnancyProfilesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => RemindersService))
+    private readonly remindersService: RemindersService,
   ) {}
 
   async create(
@@ -51,15 +58,25 @@ export class PregnancyProfilesService {
     const hpht = this.toUtcDate(dto.hpht);
     const hpl = this.addDays(hpht, 280);
 
-    return this.prisma.pregnancyProfile.create({
-      data: {
-        user_id: userId,
-        hpht,
-        hpl,
-        gravida: dto.gravida,
-        existing_conditions: dto.existing_conditions ?? [],
-        had_preeclampsia_history: dto.had_preeclampsia_history ?? false,
-      },
+    return this.prisma.$transaction(async (transaction) => {
+      const profile = await transaction.pregnancyProfile.create({
+        data: {
+          user_id: userId,
+          hpht,
+          hpl,
+          gravida: dto.gravida,
+          existing_conditions: dto.existing_conditions ?? [],
+          had_preeclampsia_history: dto.had_preeclampsia_history ?? false,
+        },
+      });
+
+      await this.remindersService.createAncReminder(
+        profile.id,
+        RiskBadge.HIJAU,
+        transaction,
+      );
+
+      return profile;
     });
   }
 
@@ -157,10 +174,20 @@ export class PregnancyProfilesService {
       );
     }
 
-    return this.prisma.pregnancyProfile.update({
-      where: { id },
-      data: { status: PregnancyStatus.SELESAI },
-      include: { user: { select: profileUserSelect } },
+    return this.prisma.$transaction(async (transaction) => {
+      const updatedProfile = await transaction.pregnancyProfile.update({
+        where: { id },
+        data: { status: PregnancyStatus.SELESAI },
+        include: { user: { select: profileUserSelect } },
+      });
+
+      await this.remindersService.completeProfileReminders(
+        id,
+        undefined,
+        transaction,
+      );
+
+      return updatedProfile;
     });
   }
 
@@ -272,7 +299,7 @@ export class PregnancyProfilesService {
     throw new ForbiddenException('Tidak memiliki akses ke profil kehamilan');
   }
 
-  private endPregnancy(
+  private async endPregnancy(
     id: string,
     newStatus: PregnancyStatus.NIFAS | PregnancyStatus.SELESAI,
     pregnancyOutcome: PregnancyOutcome | undefined,
@@ -296,17 +323,29 @@ export class PregnancyProfilesService {
 
     const now = new Date();
 
-    return this.prisma.pregnancyProfile.update({
-      where: { id },
-      data: {
-        status: newStatus,
-        pregnancy_outcome: pregnancyOutcome,
-        ended_at: now,
-        ...(newStatus === PregnancyStatus.NIFAS && {
-          nifas_start_date: now,
-        }),
-      },
-      include: { user: { select: profileUserSelect } },
+    return this.prisma.$transaction(async (transaction) => {
+      const updatedProfile = await transaction.pregnancyProfile.update({
+        where: { id },
+        data: {
+          status: newStatus,
+          pregnancy_outcome: pregnancyOutcome,
+          ended_at: now,
+          ...(newStatus === PregnancyStatus.NIFAS && {
+            nifas_start_date: now,
+          }),
+        },
+        include: { user: { select: profileUserSelect } },
+      });
+
+      await this.remindersService.completeProfileReminders(
+        id,
+        newStatus === PregnancyStatus.SELESAI
+          ? undefined
+          : ReminderType.ANC_CHECKUP,
+        transaction,
+      );
+
+      return updatedProfile;
     });
   }
 

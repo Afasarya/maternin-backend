@@ -9,11 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import type { PostpartumLog, Prisma } from '../../generated/prisma/client.js';
-import {
-  ReminderStatus,
-  ReminderType,
-  UserRole,
-} from '../common/constants/index.js';
+import { UserRole } from '../common/constants/index.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { AiServiceUnavailableException } from '../common/exceptions/ai-service-unavailable.exception.js';
 import {
@@ -22,6 +18,7 @@ import {
 } from '../common/services/ai-service.client.js';
 import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RemindersService } from '../reminders/reminders.service.js';
 import { CreatePostpartumLogDto } from './dto/create-postpartum-log.dto.js';
 import { PostpartumFlagCallbackDto } from './dto/postpartum-flag-callback.dto.js';
 import { PostpartumLogSort } from './dto/query-postpartum-logs.dto.js';
@@ -68,6 +65,7 @@ export class PostpartumService {
     private readonly prisma: PrismaService,
     private readonly aiServiceClient: AiServiceClient,
     private readonly pregnancyProfilesService: PregnancyProfilesService,
+    private readonly remindersService: RemindersService,
     @InjectQueue(POSTPARTUM_RETRY_QUEUE)
     private readonly postpartumRetryQueue: Queue<PostpartumRetryJobData>,
   ) {}
@@ -102,12 +100,10 @@ export class PostpartumService {
     }
 
     let log: PostpartumLog;
-    const cadenceDays = this.postpartumCadenceDays(dto.day_number);
-    const nextTriggerAt = this.addDays(new Date(), cadenceDays);
 
     try {
-      [log] = await this.prisma.$transaction([
-        this.prisma.postpartumLog.create({
+      log = await this.prisma.$transaction(async (transaction) => {
+        const createdLog = await transaction.postpartumLog.create({
           data: {
             pregnancy_profile_id: dto.pregnancy_profile_id,
             day_number: dto.day_number,
@@ -118,28 +114,16 @@ export class PostpartumService {
             mood_flag: dto.mood_flag,
             client_uuid: dto.client_uuid,
           },
-        }),
-        this.prisma.reminder.upsert({
-          where: {
-            pregnancy_profile_id_reminder_type: {
-              pregnancy_profile_id: dto.pregnancy_profile_id,
-              reminder_type: ReminderType.POSTPARTUM_CHECKIN,
-            },
-          },
-          create: {
-            pregnancy_profile_id: dto.pregnancy_profile_id,
-            reminder_type: ReminderType.POSTPARTUM_CHECKIN,
-            cadence_days: cadenceDays,
-            next_trigger_at: nextTriggerAt,
-            status: ReminderStatus.ACTIVE,
-          },
-          update: {
-            cadence_days: cadenceDays,
-            next_trigger_at: nextTriggerAt,
-            status: ReminderStatus.ACTIVE,
-          },
-        }),
-      ]);
+        });
+
+        await this.remindersService.createPostpartumReminder(
+          dto.pregnancy_profile_id,
+          dto.day_number,
+          transaction,
+        );
+
+        return createdLog;
+      });
     } catch (error: unknown) {
       if (dto.client_uuid && isUniqueConstraintError(error)) {
         const winner = await this.findByClientUuid(dto.client_uuid);
@@ -376,23 +360,5 @@ export class PostpartumService {
         'client_uuid sudah digunakan untuk profil kehamilan lain',
       );
     }
-  }
-
-  private postpartumCadenceDays(dayNumber: number) {
-    if (dayNumber <= 3) {
-      return 1;
-    }
-
-    if (dayNumber <= 14) {
-      return 2;
-    }
-
-    return 7;
-  }
-
-  private addDays(date: Date, days: number) {
-    const result = new Date(date);
-    result.setUTCDate(result.getUTCDate() + days);
-    return result;
   }
 }

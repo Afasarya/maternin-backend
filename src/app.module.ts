@@ -10,9 +10,11 @@ import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { FacilitiesModule } from './facilities/facilities.module.js';
 import { FamilyCircleModule } from './family-circle/family-circle.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { PostpartumModule } from './postpartum/postpartum.module.js';
 import { PregnancyProfilesModule } from './pregnancy-profiles/pregnancy-profiles.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { RemindersModule } from './reminders/reminders.module.js';
 import { RiskAssessmentsModule } from './risk-assessments/risk-assessments.module.js';
 import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.module.js';
 
@@ -84,6 +86,12 @@ import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.modul
 
     // ─── Family notification contacts ───
     FamilyCircleModule,
+
+    // ─── Dynamic ANC & postpartum reminder scheduler ───
+    RemindersModule,
+
+    // ─── Queued Fonnte WhatsApp delivery & notification history ───
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

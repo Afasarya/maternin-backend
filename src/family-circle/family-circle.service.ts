@@ -1,5 +1,7 @@
 import {
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -20,6 +22,7 @@ interface Pagination {
 export class FamilyCircleService {
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => PregnancyProfilesService))
     private readonly pregnancyProfilesService: PregnancyProfilesService,
   ) {}
 
@@ -61,6 +64,14 @@ export class FamilyCircleService {
     const contact = await this.findContact(id);
 
     if (requester.role === UserRole.ADMIN) {
+      return contact;
+    }
+
+    if (requester.role === UserRole.BIDAN) {
+      await this.pregnancyProfilesService.findOne(
+        contact.pregnancy_profile_id,
+        requester,
+      );
       return contact;
     }
 

@@ -128,6 +128,18 @@ describe('FamilyCircleService', () => {
     });
   });
 
+  it('rejects another patient from listing contacts', async () => {
+    const requester = { ...owner, id: otherPatientId };
+    pregnancyProfilesService.findOne.mockRejectedValue(
+      new ForbiddenException('Tidak memiliki akses ke profil kehamilan'),
+    );
+
+    await expect(
+      service.findByProfile(profileId, { limit: 20, offset: 0 }, requester),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.familyCircle.findMany).not.toHaveBeenCalled();
+  });
+
   it('propagates access denial for an out-of-region bidan list', async () => {
     const requester = {
       id: otherPatientId,
@@ -148,6 +160,43 @@ describe('FamilyCircleService', () => {
     await expect(service.findOne(contactId, owner)).resolves.toEqual(contact);
 
     expect(pregnancyProfilesService.findOne).toHaveBeenCalledWith(profileId);
+  });
+
+  it('rejects contact detail access by another patient', async () => {
+    await expect(
+      service.findOne(contactId, { ...owner, id: otherPatientId }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('returns contact detail to an in-region bidan', async () => {
+    const requester = {
+      id: otherPatientId,
+      role: UserRole.BIDAN,
+      puskesmas_id: puskesmasId,
+    };
+
+    await expect(service.findOne(contactId, requester)).resolves.toEqual(
+      contact,
+    );
+    expect(pregnancyProfilesService.findOne).toHaveBeenCalledWith(
+      profileId,
+      requester,
+    );
+  });
+
+  it('rejects contact detail access by an out-of-region bidan', async () => {
+    const requester = {
+      id: otherPatientId,
+      role: UserRole.BIDAN,
+      puskesmas_id: '77777777-7777-4777-8777-777777777777',
+    };
+    pregnancyProfilesService.findOne.mockRejectedValue(
+      new ForbiddenException('Tidak memiliki akses ke profil kehamilan'),
+    );
+
+    await expect(service.findOne(contactId, requester)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('returns contact detail to admin without owner validation', async () => {
