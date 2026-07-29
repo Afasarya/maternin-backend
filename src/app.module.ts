@@ -8,6 +8,7 @@ import { AncRecordsModule } from './anc-records/anc-records.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
+import { BidanModule } from './bidan/bidan.module.js';
 import { FacilitiesModule } from './facilities/facilities.module.js';
 import { FamilyCircleModule } from './family-circle/family-circle.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
@@ -92,6 +93,9 @@ import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.modul
 
     // ─── Queued Fonnte WhatsApp delivery & notification history ───
     NotificationsModule,
+
+    // ─── Bidan patient monitoring dashboard ───
+    BidanModule,
   ],
   controllers: [AppController],
   providers: [AppService],

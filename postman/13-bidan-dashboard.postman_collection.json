@@ -1,0 +1,699 @@
+{
+  "info": {
+    "name": "13 — Bidan Dashboard",
+    "description": "Task 13: daftar pasien bidan terurut risiko terbaru, filter/search/pagination, visit brief lokal dari data klinis, statistik wilayah, cache Redis 5 menit, dan kontrol akses bidan/admin. Jalankan seed sebelum collection agar assertion data deterministik tersedia.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan_lain",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_kader",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "bidan_patient_total",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "bidan_statistics_total",
+      "value": "0",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Patients",
+      "item": [
+        {
+          "name": "GET /bidan/patients — default sorted by risk",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.data).to.be.an('array');",
+                  "pm.expect(result.total).to.be.a('number');",
+                  "pm.expect(result.limit).to.eql(20);",
+                  "pm.expect(result.offset).to.eql(0);",
+                  "pm.expect(result.data.length).to.be.at.most(20);",
+                  "pm.collectionVariables.set('bidan_patient_total', String(result.total));",
+                  "const ranks = { merah: 0, kuning: 1, hijau: 2, null: 3 };",
+                  "const actualRanks = result.data.map((patient) => ranks[String(patient.latest_risk_badge)]);",
+                  "pm.test('Pasien globally sorted merah, kuning, hijau, lalu belum dinilai', () => pm.expect(actualRanks).to.eql([...actualRanks].sort((a, b) => a - b)));",
+                  "pm.test('Semua field dashboard tersedia', () => result.data.forEach((patient) => {",
+                  "  pm.expect(patient).to.have.keys('pregnancy_profile_id', 'patient_name', 'phone_number', 'hpl', 'gestational_week', 'latest_risk_badge', 'latest_aggregate_score', 'last_checkin_date', 'risk_factors');",
+                  "  pm.expect(patient.risk_factors).to.be.an('array');",
+                  "}));",
+                  "const first = result.data[0];",
+                  "if (first) pm.collectionVariables.set('pregnancy_profile_id', first.pregnancy_profile_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients — filter merah",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.test('Hanya latest badge merah', () => {",
+                  "  pm.expect(result.data).to.be.an('array').and.not.empty;",
+                  "  result.data.forEach((patient) => pm.expect(patient.latest_risk_badge).to.eql('merah'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients?risk_badge=merah",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients"],
+              "query": [
+                {
+                  "key": "risk_badge",
+                  "value": "merah"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients — search Siti",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.test('Nama pasien sesuai pencarian case-insensitive', () => {",
+                  "  pm.expect(result.data).to.be.an('array').and.not.empty;",
+                  "  result.data.forEach((patient) => pm.expect(patient.patient_name.toLowerCase()).to.include('siti'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients?search=Siti",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "Siti"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients — pagination",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result.limit).to.eql(2);",
+                  "pm.expect(result.offset).to.eql(0);",
+                  "pm.expect(result.data.length).to.be.at.most(2);",
+                  "pm.expect(result.total).to.be.at.least(result.data.length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients?limit=2&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "2"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Visit Brief",
+      "item": [
+        {
+          "name": "GET /bidan/patients/:id/visit-brief",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const brief = pm.response.json().data;",
+                  "pm.expect(brief).to.have.keys('patient_name', 'gestational_week', 'latest_risk_badge', 'vitals_summary', 'risk_factors', 'recent_symptoms', 'recommendation', 'last_visit_date');",
+                  "pm.expect(brief.patient_name).to.be.a('string');",
+                  "pm.expect(brief.gestational_week).to.be.a('number');",
+                  "pm.expect(brief.risk_factors).to.be.an('array');",
+                  "pm.expect(brief.recent_symptoms).to.be.an('array');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients/{{pregnancy_profile_id}}/visit-brief",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients", "{{pregnancy_profile_id}}", "visit-brief"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Statistics",
+      "item": [
+        {
+          "name": "GET /bidan/statistics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const stats = pm.response.json().data;",
+                  "pm.expect(stats).to.have.keys('total_patients', 'risk_distribution', 'overdue_checkins', 'nifas_count');",
+                  "pm.expect(stats.total_patients).to.be.a('number');",
+                  "pm.expect(stats.risk_distribution).to.have.keys('merah', 'kuning', 'hijau');",
+                  "pm.expect(stats.overdue_checkins).to.be.a('number');",
+                  "pm.expect(stats.nifas_count).to.be.a('number');",
+                  "const assessed = stats.risk_distribution.merah + stats.risk_distribution.kuning + stats.risk_distribution.hijau;",
+                  "pm.expect(assessed).to.be.at.most(stats.total_patients);",
+                  "pm.collectionVariables.set('bidan_statistics_total', String(stats.total_patients));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/statistics",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "statistics"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access Control",
+      "item": [
+        {
+          "name": "GET /bidan/patients — admin global",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "const ids = result.data.map((patient) => patient.pregnancy_profile_id);",
+                  "pm.test('Admin melihat pasien lintas puskesmas', () => {",
+                  "  pm.expect(ids).to.include('e0000000-0000-4000-8000-000000000001');",
+                  "  pm.expect(ids).to.include('e0000000-0000-4000-8000-000000000003');",
+                  "  pm.expect(result.total).to.be.greaterThan(Number(pm.collectionVariables.get('bidan_patient_total')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients — bidan lain hanya wilayahnya",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "const expectedPandanaranProfiles = ['e0000000-0000-4000-8000-000000000003'];",
+                  "pm.test('Semua pasien berasal dari Puskesmas Pandanaran', () => {",
+                  "  pm.expect(result.total).to.eql(expectedPandanaranProfiles.length);",
+                  "  pm.expect(result.data).to.have.length(expectedPandanaranProfiles.length);",
+                  "  result.data.forEach((patient) => pm.expect(expectedPandanaranProfiles).to.include(patient.pregnancy_profile_id));",
+                  "  pm.expect(result.data.map((patient) => patient.pregnancy_profile_id).sort()).to.eql([...expectedPandanaranProfiles].sort());",
+                  "  pm.expect(result.total).to.not.eql(Number(pm.collectionVariables.get('bidan_patient_total')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients/:id/visit-brief — bidan luar wilayah ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.expect(JSON.stringify(pm.response.json().message)).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients/e0000000-0000-4000-8000-000000000001/visit-brief",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients", "e0000000-0000-4000-8000-000000000001", "visit-brief"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients — ibu hamil ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients — kader ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients/:id/visit-brief — ibu hamil ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients/e0000000-0000-4000-8000-000000000001/visit-brief",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients", "e0000000-0000-4000-8000-000000000001", "visit-brief"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients/:id/visit-brief — kader ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients/e0000000-0000-4000-8000-000000000001/visit-brief",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients", "e0000000-0000-4000-8000-000000000001", "visit-brief"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/patients/:id/visit-brief — admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const brief = pm.response.json().data;",
+                  "pm.expect(brief.patient_name).to.eql('Siti Rahmawati');",
+                  "pm.expect(brief.risk_factors).to.be.an('array');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/patients/e0000000-0000-4000-8000-000000000001/visit-brief",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "patients", "e0000000-0000-4000-8000-000000000001", "visit-brief"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/statistics — admin global",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const stats = pm.response.json().data;",
+                  "pm.test('Admin menerima statistik global tanpa puskesmas_id', () => {",
+                  "  pm.expect(stats.total_patients).to.eql(4);",
+                  "  pm.expect(stats.total_patients).to.be.greaterThan(Number(pm.collectionVariables.get('bidan_statistics_total')));",
+                  "  pm.expect(stats.risk_distribution).to.eql({ merah: 1, kuning: 1, hijau: 1 });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/statistics",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "statistics"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/statistics — bidan lain wilayah Pandanaran",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const stats = pm.response.json().data;",
+                  "pm.test('Statistik spesifik Puskesmas Pandanaran', () => {",
+                  "  pm.expect(stats.total_patients).to.eql(1);",
+                  "  pm.expect(stats.total_patients).to.not.eql(Number(pm.collectionVariables.get('bidan_statistics_total')));",
+                  "  pm.expect(stats.risk_distribution).to.eql({ merah: 0, kuning: 0, hijau: 0 });",
+                  "  pm.expect(stats.nifas_count).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan_lain}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/statistics",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "statistics"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/statistics — ibu hamil ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/statistics",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "statistics"]
+            }
+          }
+        },
+        {
+          "name": "GET /bidan/statistics — kader ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bidan/statistics",
+              "host": ["{{base_url}}"],
+              "path": ["bidan", "statistics"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

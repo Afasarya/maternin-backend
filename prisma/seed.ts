@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 import {
+  AncSource,
+  CheckinType,
   NotificationChannel,
   NotificationStatus,
   NotifyOn,
@@ -10,6 +12,8 @@ import {
   PrismaClient,
   ReminderStatus,
   ReminderType,
+  RiskBadge,
+  SymptomSource,
   UserRole,
 } from '../generated/prisma/client.js';
 
@@ -119,6 +123,22 @@ const userSeeds = [
     email: 'fitri.handayani@maternin.example.test',
     puskesmas_id: puskesmasSeeds[2].id,
   },
+  {
+    id: 'd0000000-0000-4000-8000-000000000005',
+    role: UserRole.ibu_hamil,
+    full_name: 'Lina Maharani',
+    phone_number: '+6281410000005',
+    email: 'lina.maharani@maternin.example.test',
+    puskesmas_id: puskesmasSeeds[0].id,
+  },
+  {
+    id: 'd0000000-0000-4000-8000-000000000006',
+    role: UserRole.ibu_hamil,
+    full_name: 'Rani Puspitasari',
+    phone_number: '+6281410000006',
+    email: 'rani.puspitasari@maternin.example.test',
+    puskesmas_id: puskesmasSeeds[0].id,
+  },
 ] as const;
 
 const pregnancyProfileSeeds = [
@@ -152,6 +172,117 @@ const pregnancyProfileSeeds = [
     gravida: 1,
     existing_conditions: [],
     had_preeclampsia_history: false,
+  },
+  {
+    id: 'e0000000-0000-4000-8000-000000000005',
+    user_id: 'd0000000-0000-4000-8000-000000000005',
+    hpht: new Date('2026-01-10T00:00:00.000Z'),
+    hpl: new Date('2026-10-17T00:00:00.000Z'),
+    gravida: 2,
+    existing_conditions: ['anemia'],
+    had_preeclampsia_history: false,
+  },
+  {
+    id: 'e0000000-0000-4000-8000-000000000006',
+    user_id: 'd0000000-0000-4000-8000-000000000006',
+    hpht: new Date('2026-02-01T00:00:00.000Z'),
+    hpl: new Date('2026-11-08T00:00:00.000Z'),
+    gravida: 1,
+    existing_conditions: [],
+    had_preeclampsia_history: false,
+  },
+] as const;
+
+const ancRecordSeeds = [
+  {
+    id: '90000000-0000-4000-8000-000000000001',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    recorded_by_user_id: 'b0000000-0000-4000-8000-000000000001',
+    source: AncSource.nakes,
+    systolic: 145,
+    diastolic: 95,
+    weight_kg: 63.5,
+    fundal_height_cm: 24,
+    protein_urine: 'positif',
+    platelet_count: 145000,
+    recorded_at: new Date('2026-07-25T08:00:00.000Z'),
+  },
+] as const;
+
+const symptomCheckinSeeds = [
+  {
+    id: '91000000-0000-4000-8000-000000000001',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    checkin_type: CheckinType.pregnancy,
+    answers: {
+      bengkak_kaki: true,
+      sakit_kepala: 'berat',
+      pandangan_kabur: true,
+    },
+    source: SymptomSource.self,
+    created_at: new Date('2026-07-27T07:30:00.000Z'),
+  },
+  {
+    id: '91000000-0000-4000-8000-000000000005',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000005',
+    checkin_type: CheckinType.pregnancy,
+    answers: { mudah_lelah: true, pusing: 'kadang' },
+    source: SymptomSource.self,
+    created_at: new Date('2026-07-26T07:30:00.000Z'),
+  },
+  {
+    id: '91000000-0000-4000-8000-000000000006',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000006',
+    checkin_type: CheckinType.pregnancy,
+    answers: { keluhan: 'tidak_ada' },
+    source: SymptomSource.self,
+    created_at: new Date('2026-07-25T07:30:00.000Z'),
+  },
+] as const;
+
+const riskAssessmentSeeds = [
+  {
+    id: '92000000-0000-4000-8000-000000000001',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    symptom_checkin_id: '91000000-0000-4000-8000-000000000001',
+    triage_score: 88,
+    anemia_probability: 0.28,
+    preeclampsia_probability: 0.91,
+    aggregate_score: 90,
+    risk_badge: RiskBadge.merah,
+    risk_factors: [
+      'Tekanan darah tinggi (145/95)',
+      'Sakit kepala berat',
+      'Pandangan kabur',
+    ],
+    recommendation_text: 'Segera periksa ke fasilitas kesehatan.',
+    created_at: new Date('2026-07-27T08:00:00.000Z'),
+  },
+  {
+    id: '92000000-0000-4000-8000-000000000005',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000005',
+    symptom_checkin_id: '91000000-0000-4000-8000-000000000005',
+    triage_score: 58,
+    anemia_probability: 0.63,
+    preeclampsia_probability: 0.18,
+    aggregate_score: 61,
+    risk_badge: RiskBadge.kuning,
+    risk_factors: ['Keluhan mudah lelah', 'Riwayat anemia'],
+    recommendation_text: 'Jadwalkan pemeriksaan dengan bidan.',
+    created_at: new Date('2026-07-26T08:00:00.000Z'),
+  },
+  {
+    id: '92000000-0000-4000-8000-000000000006',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000006',
+    symptom_checkin_id: '91000000-0000-4000-8000-000000000006',
+    triage_score: 15,
+    anemia_probability: 0.08,
+    preeclampsia_probability: 0.05,
+    aggregate_score: 12,
+    risk_badge: RiskBadge.hijau,
+    risk_factors: [],
+    recommendation_text: 'Lanjutkan pemantauan rutin.',
+    created_at: new Date('2026-07-25T08:00:00.000Z'),
   },
 ] as const;
 
@@ -199,6 +330,22 @@ const reminderSeeds = [
     next_trigger_at: new Date('2026-08-08T00:00:00.000Z'),
     status: ReminderStatus.active,
   },
+  {
+    id: '70000000-0000-4000-8000-000000000005',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000005',
+    reminder_type: ReminderType.anc_checkup,
+    cadence_days: 7,
+    next_trigger_at: new Date('2026-08-02T00:00:00.000Z'),
+    status: ReminderStatus.active,
+  },
+  {
+    id: '70000000-0000-4000-8000-000000000006',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000006',
+    reminder_type: ReminderType.anc_checkup,
+    cadence_days: 14,
+    next_trigger_at: new Date('2026-07-27T00:00:00.000Z'),
+    status: ReminderStatus.active,
+  },
 ] as const;
 
 const notificationLogSeeds = [
@@ -206,8 +353,7 @@ const notificationLogSeeds = [
     id: '80000000-0000-4000-8000-000000000001',
     pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
     channel: NotificationChannel.wa_patient,
-    message:
-      'Halo Siti Rahmawati, waktunya pemeriksaan kehamilan rutin Anda.',
+    message: 'Halo Siti Rahmawati, waktunya pemeriksaan kehamilan rutin Anda.',
     status: NotificationStatus.sent,
     sent_at: new Date('2026-07-26T08:00:00.000Z'),
   },
@@ -223,8 +369,7 @@ const notificationLogSeeds = [
     id: '80000000-0000-4000-8000-000000000003',
     pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
     channel: NotificationChannel.wa_bidan,
-    message:
-      '[MaternIn] Pasien Siti Rahmawati memiliki status risiko kuning.',
+    message: '[MaternIn] Pasien Siti Rahmawati memiliki status risiko kuning.',
     status: NotificationStatus.sent,
     sent_at: new Date('2026-07-26T08:05:00.000Z'),
   },
@@ -278,6 +423,36 @@ async function main() {
     );
 
     await prisma.$transaction(
+      ancRecordSeeds.map(({ id, ...data }) =>
+        prisma.ancRecord.upsert({
+          where: { id },
+          update: data,
+          create: { id, ...data },
+        }),
+      ),
+    );
+
+    await prisma.$transaction(
+      symptomCheckinSeeds.map(({ id, ...data }) =>
+        prisma.symptomCheckin.upsert({
+          where: { id },
+          update: data,
+          create: { id, ...data },
+        }),
+      ),
+    );
+
+    await prisma.$transaction(
+      riskAssessmentSeeds.map(({ id, ...data }) =>
+        prisma.riskAssessment.upsert({
+          where: { id },
+          update: data,
+          create: { id, ...data },
+        }),
+      ),
+    );
+
+    await prisma.$transaction(
       familyCircleSeeds.map(({ id, ...data }) =>
         prisma.familyCircle.upsert({
           where: { id },
@@ -316,6 +491,9 @@ async function main() {
       puskesmasCount,
       userCount,
       pregnancyProfileCount,
+      ancRecordCount,
+      symptomCheckinCount,
+      riskAssessmentCount,
       familyCircleCount,
       reminderCount,
       notificationLogCount,
@@ -332,6 +510,15 @@ async function main() {
       }),
       prisma.pregnancyProfile.count({
         where: { id: { in: pregnancyProfileSeeds.map(({ id }) => id) } },
+      }),
+      prisma.ancRecord.count({
+        where: { id: { in: ancRecordSeeds.map(({ id }) => id) } },
+      }),
+      prisma.symptomCheckin.count({
+        where: { id: { in: symptomCheckinSeeds.map(({ id }) => id) } },
+      }),
+      prisma.riskAssessment.count({
+        where: { id: { in: riskAssessmentSeeds.map(({ id }) => id) } },
       }),
       prisma.familyCircle.count({
         where: { id: { in: familyCircleSeeds.map(({ id }) => id) } },
@@ -350,7 +537,7 @@ async function main() {
     ]);
 
     console.log(
-      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan, ${familyCircleCount} kontak keluarga, ${reminderCount} reminder, ${notificationLogCount} log notifikasi.`,
+      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan, ${ancRecordCount} catatan ANC, ${symptomCheckinCount} symptom check-in, ${riskAssessmentCount} risk assessment, ${familyCircleCount} kontak keluarga, ${reminderCount} reminder, ${notificationLogCount} log notifikasi.`,
     );
     console.log(`Password seluruh akun dummy: ${SEED_PASSWORD}`);
     console.table(

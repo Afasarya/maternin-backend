@@ -275,6 +275,7 @@ Struktur standar (id, pregnancy_profile_id, FK terkait, timestamp, status) — d
 | POST | `/family-circle` | ibu_hamil | Tambah kontak keluarga |
 | GET | `/bidan/patients` | bidan | List pasien wilayahnya, terurut `risk_badge` |
 | GET | `/bidan/patients/:id/visit-brief` | bidan | Panggil AI Service, kembalikan ringkasan |
+| GET | `/bidan/statistics` | bidan, admin | Statistik pasien wilayah bidan; admin menerima statistik global tanpa query `puskesmas_id` |
 | POST | `/sync/batch` | kader | Kirim data offline sekaligus (lihat section 7.4) |
 | GET | `/facilities/nearby` | ibu_hamil | Proxy ke Nominatim |
 | POST | `/chat` | ibu_hamil | Proxy ke AI Service `/chat`, simpan ke `chat_messages` |

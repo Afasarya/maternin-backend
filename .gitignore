@@ -46,6 +46,7 @@ postman/*
 !postman/10-family-circle.postman_collection.json
 !postman/11-reminders.postman_collection.json
 !postman/12-notifications.postman_collection.json
+!postman/13-bidan-dashboard.postman_collection.json
 
 # ==========================
 # IDE
