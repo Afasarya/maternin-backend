@@ -9,6 +9,8 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { BidanModule } from './bidan/bidan.module.js';
+import { ChatModule } from './chat/chat.module.js';
+import { ConsultationsModule } from './consultations/consultations.module.js';
 import { FacilitiesModule } from './facilities/facilities.module.js';
 import { FamilyCircleModule } from './family-circle/family-circle.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
@@ -16,8 +18,10 @@ import { PostpartumModule } from './postpartum/postpartum.module.js';
 import { PregnancyProfilesModule } from './pregnancy-profiles/pregnancy-profiles.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RemindersModule } from './reminders/reminders.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 import { RiskAssessmentsModule } from './risk-assessments/risk-assessments.module.js';
 import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.module.js';
+import { SyncModule } from './sync/sync.module.js';
 
 @Module({
   imports: [
@@ -96,6 +100,18 @@ import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.modul
 
     // ─── Bidan patient monitoring dashboard ───
     BidanModule,
+
+    // ─── Kader offline batch synchronization ───
+    SyncModule,
+
+    // ─── AI chatbot proxy & chronological message history ───
+    ChatModule,
+
+    // ─── Basic consultation session management ───
+    ConsultationsModule,
+
+    // ─── Monthly MDSR operational report export ───
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

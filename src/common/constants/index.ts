@@ -100,3 +100,13 @@ export enum SymptomSource {
   SELF = 'self',
   KADER_OFFLINE = 'kader_offline',
 }
+
+export enum ChatSenderType {
+  USER = 'user',
+  AI = 'ai',
+}
+
+export enum ConsultationStatus {
+  OPEN = 'open',
+  CLOSED = 'closed',
+}

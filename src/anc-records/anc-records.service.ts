@@ -26,6 +26,10 @@ export interface CreateAncRecordResult {
   created: boolean;
 }
 
+export interface CreateAncRecordOptions {
+  replaceExisting?: boolean;
+}
+
 const isUniqueConstraintError = (
   error: unknown,
 ): error is PrismaKnownRequestError => {
@@ -50,6 +54,7 @@ export class AncRecordsService {
   async create(
     dto: CreateAncRecordDto,
     requester: CurrentUserData,
+    options: CreateAncRecordOptions = {},
   ): Promise<CreateAncRecordResult> {
     await this.assertProfileAccess(dto.pregnancy_profile_id, requester, true);
 
@@ -63,6 +68,10 @@ export class AncRecordsService {
           throw new ConflictException(
             'client_uuid sudah digunakan untuk profil kehamilan lain',
           );
+        }
+
+        if (options.replaceExisting) {
+          return this.replaceExisting(existing.id, dto, requester);
         }
 
         return { record: existing, created: false };
@@ -94,6 +103,10 @@ export class AncRecordsService {
         });
 
         if (existing?.pregnancy_profile_id === dto.pregnancy_profile_id) {
+          if (options.replaceExisting) {
+            return this.replaceExisting(existing.id, dto, requester);
+          }
+
           return { record: existing, created: false };
         }
 
@@ -202,5 +215,28 @@ export class AncRecordsService {
     }
 
     throw new ForbiddenException('Role tidak dapat membuat catatan ANC');
+  }
+
+  private async replaceExisting(
+    id: string,
+    dto: CreateAncRecordDto,
+    requester: CurrentUserData,
+  ): Promise<CreateAncRecordResult> {
+    const record = await this.prisma.ancRecord.update({
+      where: { id },
+      data: {
+        recorded_by_user_id: requester.id,
+        source: this.resolveSource(requester.role),
+        systolic: dto.systolic ?? null,
+        diastolic: dto.diastolic ?? null,
+        weight_kg: dto.weight_kg ?? null,
+        fundal_height_cm: dto.fundal_height_cm ?? null,
+        protein_urine: dto.protein_urine ?? null,
+        platelet_count: dto.platelet_count ?? null,
+        recorded_at: dto.recorded_at ? new Date(dto.recorded_at) : new Date(),
+      },
+    });
+
+    return { record, created: false };
   }
 }

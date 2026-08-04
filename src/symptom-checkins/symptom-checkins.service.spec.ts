@@ -90,6 +90,7 @@ describe('SymptomCheckinsService', () => {
   const prisma = {
     symptomCheckin: {
       create: jest.fn(),
+      update: jest.fn(),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -248,6 +249,135 @@ describe('SymptomCheckinsService', () => {
 
       expect(prisma.symptomCheckin.create).not.toHaveBeenCalled();
       expect(aiServiceClient.analyzeTriageSymptoms).not.toHaveBeenCalled();
+    });
+
+    it('replaces a newer offline check-in and recalculates its assessment', async () => {
+      const updatedCheckin = {
+        ...checkin,
+        answers: { sakit_kepala: 'ringan' },
+        source: SymptomSource.KADER_OFFLINE,
+        created_at: new Date('2026-07-24T11:00:00.000Z'),
+      };
+      const updatedAssessment = {
+        ...assessment,
+        risk_badge: RiskBadge.KUNING,
+      };
+      prisma.symptomCheckin.findFirst.mockResolvedValue(checkin);
+      prisma.symptomCheckin.update.mockResolvedValue(updatedCheckin);
+      prisma.symptomCheckin.findUnique.mockResolvedValue(updatedCheckin);
+      ancRecordsService.findLatest.mockResolvedValue(null);
+      aiServiceClient.analyzeTriageSymptoms.mockResolvedValue({
+        ...aiResponse,
+        risk_badge: RiskBadge.KUNING,
+      });
+      riskAssessmentsService.createFromAiResponse.mockResolvedValue(
+        updatedAssessment,
+      );
+
+      await expect(
+        service.create(
+          {
+            pregnancy_profile_id: profileId,
+            checkin_type: CheckinType.PREGNANCY,
+            answers: updatedCheckin.answers,
+            client_uuid: clientUuid,
+          },
+          {
+            id: staffId,
+            role: UserRole.KADER,
+            puskesmas_id: puskesmasId,
+          },
+          requestId,
+          {
+            replaceExisting: true,
+            createdAt: new Date('2026-07-24T11:00:00.000Z'),
+          },
+        ),
+      ).resolves.toEqual({
+        created: false,
+        data: {
+          checkin: updatedCheckin,
+          risk_assessment: updatedAssessment,
+        },
+      });
+
+      expect(prisma.symptomCheckin.update).toHaveBeenCalledWith({
+        where: { id: checkinId },
+        data: {
+          checkin_type: CheckinType.PREGNANCY,
+          answers: updatedCheckin.answers,
+          conjunctiva_image_url: null,
+          source: SymptomSource.KADER_OFFLINE,
+          created_at: new Date('2026-07-24T11:00:00.000Z'),
+        },
+      });
+      expect(riskAssessmentsService.createFromAiResponse).toHaveBeenCalledWith(
+        profileId,
+        checkinId,
+        { ...aiResponse, risk_badge: RiskBadge.KUNING },
+        true,
+      );
+    });
+
+    it('preserves LWW assessment replacement intent in an AI retry job', async () => {
+      const updatedCheckin = {
+        ...checkin,
+        answers: { sakit_kepala: 'ringan' },
+        source: SymptomSource.KADER_OFFLINE,
+        created_at: new Date('2026-07-24T11:00:00.000Z'),
+      };
+      prisma.symptomCheckin.findFirst.mockResolvedValue(checkin);
+      prisma.symptomCheckin.update.mockResolvedValue(updatedCheckin);
+      prisma.symptomCheckin.findUnique.mockResolvedValue(updatedCheckin);
+      ancRecordsService.findLatest.mockResolvedValue(null);
+      aiServiceClient.analyzeTriageSymptoms.mockRejectedValue(
+        new AiServiceUnavailableException(),
+      );
+      triageRetryQueue.add.mockResolvedValue({ id: checkinId });
+
+      await expect(
+        service.create(
+          {
+            pregnancy_profile_id: profileId,
+            checkin_type: CheckinType.PREGNANCY,
+            answers: updatedCheckin.answers,
+            client_uuid: clientUuid,
+          },
+          {
+            id: staffId,
+            role: UserRole.KADER,
+            puskesmas_id: puskesmasId,
+          },
+          requestId,
+          {
+            replaceExisting: true,
+            createdAt: updatedCheckin.created_at,
+          },
+        ),
+      ).resolves.toEqual({
+        created: false,
+        data: {
+          checkin: updatedCheckin,
+          status: 'processing',
+          message: 'Sedang diproses',
+        },
+      });
+
+      expect(triageRetryQueue.add).toHaveBeenCalledWith(
+        TRIAGE_RETRY_JOB,
+        {
+          checkin_id: checkinId,
+          request_id: requestId,
+          replace_existing_assessment: true,
+        },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 1000 },
+          jobId: checkinId,
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      );
     });
 
     it('queues an unprocessed idempotent check-in without duplicating it', async () => {

@@ -47,6 +47,8 @@ postman/*
 !postman/11-reminders.postman_collection.json
 !postman/12-notifications.postman_collection.json
 !postman/13-bidan-dashboard.postman_collection.json
+!postman/14-sync-offline.postman_collection.json
+!postman/15-chat-consultations.postman_collection.json
 
 # ==========================
 # IDE

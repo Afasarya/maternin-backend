@@ -106,6 +106,16 @@ enum SymptomSource {
   kader_offline
 }
 
+enum ChatSenderType {
+  user
+  ai
+}
+
+enum ConsultationStatus {
+  open
+  closed
+}
+
 model User {
   id            String   @id @default(uuid()) @db.Uuid
   role          UserRole
@@ -306,29 +316,36 @@ model SyncQueue {
   status            SyncStatus      @default(pending)
   client_uuid       String          @unique @db.Uuid
 
+  @@index([device_uuid])
   @@map("sync_queue")
 }
 
 model Consultation {
-  id                   String   @id @default(uuid()) @db.Uuid
-  pregnancy_profile_id String   @db.Uuid
-  status               String   @default("open")
-  created_at           DateTime @default(now())
-  updated_at           DateTime @updatedAt
+  id                   String             @id @default(uuid()) @db.Uuid
+  pregnancy_profile_id String             @db.Uuid
+  status               ConsultationStatus @default(open)
+  created_at           DateTime           @default(now())
+  updated_at           DateTime           @updatedAt
 
   pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id])
 
+  @@index([pregnancy_profile_id, created_at])
   @@map("consultations")
 }
 
 model ChatMessage {
-  id                   String   @id @default(uuid()) @db.Uuid
-  pregnancy_profile_id String   @db.Uuid
-  sender_type          String
+  id                   String         @id @default(uuid()) @db.Uuid
+  pregnancy_profile_id String         @db.Uuid
+  sender_type          ChatSenderType
   message              String
-  created_at           DateTime @default(now())
+  reply_to_message_id  String?        @unique @db.Uuid
+  disclaimer_included  Boolean?
+  created_at           DateTime       @default(now())
 
   pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id])
+  reply_to_message  ChatMessage?     @relation("ChatReply", fields: [reply_to_message_id], references: [id], onDelete: Restrict)
+  reply             ChatMessage?     @relation("ChatReply")
 
+  @@index([pregnancy_profile_id, created_at])
   @@map("chat_messages")
 }

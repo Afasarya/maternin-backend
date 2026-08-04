@@ -28,9 +28,15 @@ interface Pagination {
   offset: number;
 }
 
+export interface CreateSymptomCheckinOptions {
+  replaceExisting?: boolean;
+  createdAt?: Date;
+}
+
 export interface TriageRetryJobData {
   checkin_id: string;
   request_id: string;
+  replace_existing_assessment?: boolean;
 }
 
 interface PrismaKnownRequestError {
@@ -70,6 +76,7 @@ export class SymptomCheckinsService {
     dto: CreateSymptomCheckinDto,
     requester: CurrentUserData,
     requestId: string,
+    options: CreateSymptomCheckinOptions = {},
   ) {
     await this.assertCreateAccess(dto.pregnancy_profile_id, requester);
 
@@ -82,6 +89,18 @@ export class SymptomCheckinsService {
         existing.pregnancy_profile_id,
         dto.pregnancy_profile_id,
       );
+
+      if (options.replaceExisting) {
+        const updated = await this.replaceExistingCheckin(
+          existing.id,
+          dto,
+          requester,
+          options.createdAt,
+        );
+
+        return this.analyzeCheckin(updated, requestId, false, true);
+      }
+
       return {
         created: false,
         data: await this.buildExistingResult(existing, requestId),
@@ -99,6 +118,7 @@ export class SymptomCheckinsService {
           conjunctiva_image_url: dto.conjunctiva_image_url,
           source: this.resolveSource(requester.role),
           client_uuid: dto.client_uuid,
+          ...(options.createdAt && { created_at: options.createdAt }),
         },
       });
     } catch (error: unknown) {
@@ -110,6 +130,18 @@ export class SymptomCheckinsService {
             winner.pregnancy_profile_id,
             dto.pregnancy_profile_id,
           );
+
+          if (options.replaceExisting) {
+            const updated = await this.replaceExistingCheckin(
+              winner.id,
+              dto,
+              requester,
+              options.createdAt,
+            );
+
+            return this.analyzeCheckin(updated, requestId, false, true);
+          }
+
           return {
             created: false,
             data: await this.buildExistingResult(winner, requestId),
@@ -120,32 +152,17 @@ export class SymptomCheckinsService {
       throw error;
     }
 
-    try {
-      const riskAssessment = await this.processTriageAnalysis(
-        checkin.id,
-        requestId,
-      );
-
-      return {
-        created: true,
-        data: { checkin, risk_assessment: riskAssessment },
-      };
-    } catch (error: unknown) {
-      if (!(error instanceof AiServiceUnavailableException)) {
-        throw error;
-      }
-
-      await this.enqueueTriageRetry(checkin.id, requestId);
-      return {
-        created: true,
-        data: this.processingResult(checkin),
-      };
-    }
+    return this.analyzeCheckin(checkin, requestId, true, false);
   }
 
-  async processTriageAnalysis(checkinId: string, requestId: string) {
-    const existingAssessment =
-      await this.riskAssessmentsService.findBySymptomCheckin(checkinId);
+  async processTriageAnalysis(
+    checkinId: string,
+    requestId: string,
+    replaceExistingAssessment = false,
+  ) {
+    const existingAssessment = replaceExistingAssessment
+      ? null
+      : await this.riskAssessmentsService.findBySymptomCheckin(checkinId);
 
     if (existingAssessment) {
       return existingAssessment;
@@ -180,6 +197,15 @@ export class SymptomCheckinsService {
       },
       requestId,
     );
+
+    if (replaceExistingAssessment) {
+      return this.riskAssessmentsService.createFromAiResponse(
+        checkin.pregnancy_profile_id,
+        checkin.id,
+        aiResponse,
+        true,
+      );
+    }
 
     return this.riskAssessmentsService.createFromAiResponse(
       checkin.pregnancy_profile_id,
@@ -241,6 +267,58 @@ export class SymptomCheckinsService {
     return this.processingResult(checkin);
   }
 
+  private async analyzeCheckin(
+    checkin: SymptomCheckin,
+    requestId: string,
+    created: boolean,
+    replaceExistingAssessment: boolean,
+  ) {
+    try {
+      const riskAssessment = await this.processTriageAnalysis(
+        checkin.id,
+        requestId,
+        replaceExistingAssessment,
+      );
+
+      return {
+        created,
+        data: { checkin, risk_assessment: riskAssessment },
+      };
+    } catch (error: unknown) {
+      if (!(error instanceof AiServiceUnavailableException)) {
+        throw error;
+      }
+
+      await this.enqueueTriageRetry(
+        checkin.id,
+        requestId,
+        replaceExistingAssessment,
+      );
+      return {
+        created,
+        data: this.processingResult(checkin),
+      };
+    }
+  }
+
+  private replaceExistingCheckin(
+    id: string,
+    dto: CreateSymptomCheckinDto,
+    requester: CurrentUserData,
+    createdAt?: Date,
+  ) {
+    return this.prisma.symptomCheckin.update({
+      where: { id },
+      data: {
+        checkin_type: dto.checkin_type,
+        answers: dto.answers as Prisma.InputJsonObject,
+        conjunctiva_image_url: dto.conjunctiva_image_url ?? null,
+        source: this.resolveSource(requester.role),
+        ...(createdAt && { created_at: createdAt }),
+      },
+    });
+  }
+
   private processingResult(checkin: SymptomCheckin) {
     return {
       checkin,
@@ -255,11 +333,21 @@ export class SymptomCheckinsService {
     });
   }
 
-  private async enqueueTriageRetry(checkinId: string, requestId: string) {
+  private async enqueueTriageRetry(
+    checkinId: string,
+    requestId: string,
+    replaceExistingAssessment = false,
+  ) {
     try {
       await this.triageRetryQueue.add(
         TRIAGE_RETRY_JOB,
-        { checkin_id: checkinId, request_id: requestId },
+        {
+          checkin_id: checkinId,
+          request_id: requestId,
+          ...(replaceExistingAssessment && {
+            replace_existing_assessment: true,
+          }),
+        },
         {
           attempts: 3,
           backoff: { type: 'exponential', delay: 1000 },

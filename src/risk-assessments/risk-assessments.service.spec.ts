@@ -79,6 +79,7 @@ describe('RiskAssessmentsService', () => {
       findUnique: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -222,6 +223,60 @@ describe('RiskAssessmentsService', () => {
         `risk:latest:${profileId}`,
         `bidan:patients:${puskesmasId}`,
       );
+    });
+
+    it('replaces an existing assessment for an explicit LWW recalculation', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-07-24T11:00:00.000Z'));
+      const updatedAssessment = {
+        ...assessment,
+        aggregate_score: 60,
+        risk_badge: RiskBadge.KUNING,
+        risk_factors: ['Keluhan ringan'],
+        recommendation_text: 'Jadwalkan pemeriksaan',
+        created_at: new Date('2026-07-24T11:00:00.000Z'),
+      };
+      prisma.riskAssessment.findFirst.mockResolvedValue(assessment);
+      prisma.riskAssessment.update.mockResolvedValue(updatedAssessment);
+
+      try {
+        await expect(
+          service.createFromAiResponse(
+            profileId,
+            checkinId,
+            {
+              risk_badge: RiskBadge.KUNING,
+              aggregate_score: 60,
+              risk_factors: ['Keluhan ringan'],
+              recommendation_text: 'Jadwalkan pemeriksaan',
+            },
+            true,
+          ),
+        ).resolves.toEqual(updatedAssessment);
+
+        expect(prisma.riskAssessment.update).toHaveBeenCalledWith({
+          where: { id: assessmentId },
+          data: {
+            triage_score: 60,
+            anemia_probability: undefined,
+            preeclampsia_probability: undefined,
+            aggregate_score: 60,
+            risk_badge: RiskBadge.KUNING,
+            risk_factors: ['Keluhan ringan'],
+            recommendation_text: 'Jadwalkan pemeriksaan',
+            created_at: new Date('2026-07-24T11:00:00.000Z'),
+          },
+        });
+        expect(
+          remindersService.updateCadenceOnNewAssessment,
+        ).toHaveBeenCalledWith(profileId, RiskBadge.KUNING, prisma);
+        expect(cache.invalidate).toHaveBeenCalledWith(
+          `risk:latest:version:${profileId}`,
+          `risk:latest:${profileId}`,
+          `bidan:patients:${puskesmasId}`,
+        );
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('returns an idempotent callback replay without duplication', async () => {

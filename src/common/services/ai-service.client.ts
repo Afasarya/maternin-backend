@@ -42,6 +42,11 @@ export interface ChatResponse {
   disclaimer_included: boolean;
 }
 
+export interface ChatPayload {
+  pregnancy_profile_id: string;
+  message: string;
+}
+
 @Injectable()
 export class AiServiceClient {
   private static readonly TIMEOUT_MS = 5000;
@@ -105,11 +110,16 @@ export class AiServiceClient {
     return data;
   }
 
-  chat(
-    payload: Record<string, unknown>,
-    requestId: string,
-  ): Promise<ChatResponse> {
-    return this.post<ChatResponse>('/api/v1/chat', payload, requestId);
+  async chat(payload: ChatPayload, requestId: string): Promise<ChatResponse> {
+    const data = await this.post<unknown>('/api/v1/chat', payload, requestId);
+
+    if (!this.isChatResponse(data)) {
+      throw new AiServiceUnavailableException(
+        'Respons chat AI Service tidak valid',
+      );
+    }
+
+    return data;
   }
 
   private async post<T>(
@@ -134,7 +144,10 @@ export class AiServiceClient {
         throw error;
       }
 
-      if (error instanceof AxiosError && error.code === 'ECONNABORTED') {
+      if (
+        error instanceof AxiosError &&
+        (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')
+      ) {
         throw new AiServiceUnavailableException(
           'AI Service melewati batas waktu 5 detik',
         );
@@ -184,6 +197,20 @@ export class AiServiceClient {
       typeof response.red_flag_triggered === 'boolean' &&
       typeof response.reason === 'string' &&
       typeof response.mental_health_flag === 'boolean'
+    );
+  }
+
+  private isChatResponse(value: unknown): value is ChatResponse {
+    if (typeof value !== 'object' || value === null) {
+      return false;
+    }
+
+    const response = value as Record<string, unknown>;
+
+    return (
+      typeof response.reply === 'string' &&
+      response.reply.trim().length > 0 &&
+      typeof response.disclaimer_included === 'boolean'
     );
   }
 

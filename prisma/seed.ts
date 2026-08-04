@@ -3,7 +3,11 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 import {
   AncSource,
+  BleedingLevel,
+  ChatSenderType,
   CheckinType,
+  ConsultationStatus,
+  MoodFlag,
   NotificationChannel,
   NotificationStatus,
   NotifyOn,
@@ -15,6 +19,7 @@ import {
   RiskBadge,
   SymptomSource,
   UserRole,
+  WoundCondition,
 } from '../generated/prisma/client.js';
 
 const SEED_PASSWORD = 'MaternIn123!';
@@ -150,6 +155,7 @@ const pregnancyProfileSeeds = [
     gravida: 1,
     existing_conditions: [],
     had_preeclampsia_history: false,
+    created_at: new Date('2026-07-02T09:00:00.000Z'),
   },
   {
     id: 'e0000000-0000-4000-8000-000000000009',
@@ -163,6 +169,7 @@ const pregnancyProfileSeeds = [
     ended_at: new Date('2026-07-22T08:00:00.000Z'),
     nifas_start_date: new Date('2026-07-22T00:00:00.000Z'),
     had_preeclampsia_history: true,
+    created_at: new Date('2025-09-02T09:00:00.000Z'),
   },
   {
     id: 'e0000000-0000-4000-8000-000000000003',
@@ -172,6 +179,7 @@ const pregnancyProfileSeeds = [
     gravida: 1,
     existing_conditions: [],
     had_preeclampsia_history: false,
+    created_at: new Date('2026-07-03T09:00:00.000Z'),
   },
   {
     id: 'e0000000-0000-4000-8000-000000000005',
@@ -181,6 +189,7 @@ const pregnancyProfileSeeds = [
     gravida: 2,
     existing_conditions: ['anemia'],
     had_preeclampsia_history: false,
+    created_at: new Date('2026-01-11T09:00:00.000Z'),
   },
   {
     id: 'e0000000-0000-4000-8000-000000000006',
@@ -190,6 +199,7 @@ const pregnancyProfileSeeds = [
     gravida: 1,
     existing_conditions: [],
     had_preeclampsia_history: false,
+    created_at: new Date('2026-02-02T09:00:00.000Z'),
   },
 ] as const;
 
@@ -286,6 +296,39 @@ const riskAssessmentSeeds = [
   },
 ] as const;
 
+const postpartumLogSeeds = [
+  {
+    id: '95000000-0000-4000-8000-000000000001',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000009',
+    day_number: 3,
+    bleeding_level: BleedingLevel.banyak,
+    fever: false,
+    wound_condition: WoundCondition.baik,
+    headache_severe: true,
+    mood_flag: MoodFlag.baik,
+    red_flag_triggered: true,
+    evaluation_reason: 'Perdarahan banyak dan sakit kepala berat.',
+    mental_health_flag: false,
+    evaluated_at: new Date('2026-07-24T08:05:00.000Z'),
+    created_at: new Date('2026-07-24T08:00:00.000Z'),
+  },
+  {
+    id: '95000000-0000-4000-8000-000000000002',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000009',
+    day_number: 5,
+    bleeding_level: BleedingLevel.normal,
+    fever: false,
+    wound_condition: WoundCondition.baik,
+    headache_severe: false,
+    mood_flag: MoodFlag.sering_sedih,
+    red_flag_triggered: false,
+    evaluation_reason: 'Perlu tindak lanjut kondisi emosional.',
+    mental_health_flag: true,
+    evaluated_at: new Date('2026-07-26T08:05:00.000Z'),
+    created_at: new Date('2026-07-26T08:00:00.000Z'),
+  },
+] as const;
+
 const familyCircleSeeds = [
   {
     id: 'f0000000-0000-4000-8000-000000000001',
@@ -356,6 +399,7 @@ const notificationLogSeeds = [
     message: 'Halo Siti Rahmawati, waktunya pemeriksaan kehamilan rutin Anda.',
     status: NotificationStatus.sent,
     sent_at: new Date('2026-07-26T08:00:00.000Z'),
+    created_at: new Date('2026-07-26T07:59:00.000Z'),
   },
   {
     id: '80000000-0000-4000-8000-000000000002',
@@ -364,6 +408,7 @@ const notificationLogSeeds = [
     message: '[MaternIn] Update kondisi Siti Rahmawati: status risiko kuning.',
     status: NotificationStatus.failed,
     sent_at: null,
+    created_at: new Date('2026-07-26T08:01:00.000Z'),
   },
   {
     id: '80000000-0000-4000-8000-000000000003',
@@ -372,6 +417,46 @@ const notificationLogSeeds = [
     message: '[MaternIn] Pasien Siti Rahmawati memiliki status risiko kuning.',
     status: NotificationStatus.sent,
     sent_at: new Date('2026-07-26T08:05:00.000Z'),
+    created_at: new Date('2026-07-26T08:04:00.000Z'),
+  },
+  {
+    id: '80000000-0000-4000-8000-000000000004',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000009',
+    channel: NotificationChannel.in_app,
+    message: 'Waktunya mengisi pemantauan masa nifas.',
+    status: NotificationStatus.sent,
+    sent_at: new Date('2026-07-26T09:00:00.000Z'),
+    created_at: new Date('2026-07-26T08:59:00.000Z'),
+  },
+] as const;
+
+const consultationSeeds = [
+  {
+    id: '94000000-0000-4000-8000-000000000001',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    status: ConsultationStatus.open,
+  },
+] as const;
+
+const chatMessageSeeds = [
+  {
+    id: '93000000-0000-4000-8000-000000000001',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    sender_type: ChatSenderType.user,
+    message: 'Apa yang perlu saya siapkan sebelum kontrol ke bidan?',
+    reply_to_message_id: null,
+    disclaimer_included: null,
+    created_at: new Date('2026-07-28T08:00:00.000Z'),
+  },
+  {
+    id: '93000000-0000-4000-8000-000000000002',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    sender_type: ChatSenderType.ai,
+    message:
+      'Siapkan buku KIA, catatan keluhan, daftar obat, dan hasil pemeriksaan sebelumnya. Informasi ini bukan pengganti konsultasi tenaga kesehatan.',
+    reply_to_message_id: '93000000-0000-4000-8000-000000000001',
+    disclaimer_included: true,
+    created_at: new Date('2026-07-28T08:00:01.000Z'),
   },
 ] as const;
 
@@ -453,6 +538,16 @@ async function main() {
     );
 
     await prisma.$transaction(
+      postpartumLogSeeds.map(({ id, ...data }) =>
+        prisma.postpartumLog.upsert({
+          where: { id },
+          update: data,
+          create: { id, ...data },
+        }),
+      ),
+    );
+
+    await prisma.$transaction(
       familyCircleSeeds.map(({ id, ...data }) =>
         prisma.familyCircle.upsert({
           where: { id },
@@ -487,6 +582,24 @@ async function main() {
       ),
     );
 
+    await prisma.$transaction(
+      consultationSeeds.map(({ id, ...data }) =>
+        prisma.consultation.upsert({
+          where: { id },
+          update: data,
+          create: { id, ...data },
+        }),
+      ),
+    );
+
+    for (const { id, ...data } of chatMessageSeeds) {
+      await prisma.chatMessage.upsert({
+        where: { id },
+        update: data,
+        create: { id, ...data },
+      });
+    }
+
     const [
       puskesmasCount,
       userCount,
@@ -494,9 +607,12 @@ async function main() {
       ancRecordCount,
       symptomCheckinCount,
       riskAssessmentCount,
+      postpartumLogCount,
       familyCircleCount,
       reminderCount,
       notificationLogCount,
+      consultationCount,
+      chatMessageCount,
     ] = await Promise.all([
       prisma.puskesmas.count({
         where: { id: { in: puskesmasSeeds.map(({ id }) => id) } },
@@ -520,6 +636,9 @@ async function main() {
       prisma.riskAssessment.count({
         where: { id: { in: riskAssessmentSeeds.map(({ id }) => id) } },
       }),
+      prisma.postpartumLog.count({
+        where: { id: { in: postpartumLogSeeds.map(({ id }) => id) } },
+      }),
       prisma.familyCircle.count({
         where: { id: { in: familyCircleSeeds.map(({ id }) => id) } },
       }),
@@ -534,10 +653,16 @@ async function main() {
       prisma.notificationLog.count({
         where: { id: { in: notificationLogSeeds.map(({ id }) => id) } },
       }),
+      prisma.consultation.count({
+        where: { id: { in: consultationSeeds.map(({ id }) => id) } },
+      }),
+      prisma.chatMessage.count({
+        where: { id: { in: chatMessageSeeds.map(({ id }) => id) } },
+      }),
     ]);
 
     console.log(
-      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan, ${ancRecordCount} catatan ANC, ${symptomCheckinCount} symptom check-in, ${riskAssessmentCount} risk assessment, ${familyCircleCount} kontak keluarga, ${reminderCount} reminder, ${notificationLogCount} log notifikasi.`,
+      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan, ${ancRecordCount} catatan ANC, ${symptomCheckinCount} symptom check-in, ${riskAssessmentCount} risk assessment, ${postpartumLogCount} log postpartum, ${familyCircleCount} kontak keluarga, ${reminderCount} reminder, ${notificationLogCount} log notifikasi, ${consultationCount} konsultasi, ${chatMessageCount} pesan chat.`,
     );
     console.log(`Password seluruh akun dummy: ${SEED_PASSWORD}`);
     console.table(

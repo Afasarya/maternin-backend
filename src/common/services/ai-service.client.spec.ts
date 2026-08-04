@@ -119,6 +119,70 @@ describe('AiServiceClient', () => {
     ).rejects.toBeInstanceOf(AiServiceUnavailableException);
   });
 
+  it('calls chat with timeout and tracing headers', async () => {
+    const chatPayload = {
+      pregnancy_profile_id: payload.pregnancy_profile_id,
+      message: 'Apakah pusing saat hamil normal?',
+    };
+    const response = {
+      reply: 'Pusing perlu dipantau. Hubungi tenaga kesehatan bila memburuk.',
+      disclaimer_included: true,
+    };
+    httpService.post.mockReturnValue(of({ data: response }));
+
+    await expect(service.chat(chatPayload, 'request-chat')).resolves.toEqual(
+      response,
+    );
+
+    expect(httpService.post).toHaveBeenCalledWith(
+      'http://ai-service.example/api/v1/chat',
+      chatPayload,
+      {
+        timeout: 5000,
+        headers: {
+          'X-Internal-Token': 'internal-token',
+          'X-Request-Id': 'request-chat',
+        },
+      },
+    );
+  });
+
+  it.each([
+    null,
+    {},
+    { reply: 123, disclaimer_included: true },
+    { reply: 'Jawaban', disclaimer_included: 'true' },
+    { reply: '   ', disclaimer_included: true },
+  ])('rejects malformed chat responses: %o', async (response) => {
+    httpService.post.mockReturnValue(of({ data: response }));
+
+    await expect(
+      service.chat(
+        {
+          pregnancy_profile_id: payload.pregnancy_profile_id,
+          message: 'Pertanyaan',
+        },
+        'request-chat',
+      ),
+    ).rejects.toBeInstanceOf(AiServiceUnavailableException);
+  });
+
+  it('maps ETIMEDOUT chat errors to AiServiceUnavailableException', async () => {
+    httpService.post.mockReturnValue(
+      throwError(() => new AxiosError('timeout', 'ETIMEDOUT')),
+    );
+
+    await expect(
+      service.chat(
+        {
+          pregnancy_profile_id: payload.pregnancy_profile_id,
+          message: 'Pertanyaan',
+        },
+        'request-chat',
+      ),
+    ).rejects.toThrow('AI Service melewati batas waktu 5 detik');
+  });
+
   it('rejects malformed triage responses', async () => {
     httpService.post.mockReturnValue(
       of({ data: { risk_badge: 'merah', aggregate_score: '84' } }),

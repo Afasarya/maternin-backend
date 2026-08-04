@@ -1,0 +1,316 @@
+{
+  "info": {
+    "name": "15 — Chat & Consultations",
+    "description": "Task 15: proxy chatbot AI dengan tracing dan retry timeout, histori kronologis, session konsultasi dasar, pagination, serta kontrol akses. Jalankan seed. Isi token akun dummy sesuai role.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
+    { "key": "token_ibu", "value": "", "type": "string" },
+    { "key": "token_ibu_lain", "value": "", "type": "string" },
+    { "key": "token_bidan", "value": "", "type": "string" },
+    { "key": "token_bidan_lain", "value": "", "type": "string" },
+    { "key": "token_admin", "value": "", "type": "string" },
+    { "key": "token_kader", "value": "", "type": "string" },
+    { "key": "pregnancy_profile_id", "value": "e0000000-0000-4000-8000-000000000001", "type": "string" },
+    { "key": "seeded_chat_message_id", "value": "93000000-0000-4000-8000-000000000001", "type": "string" },
+    { "key": "consultation_id", "value": "94000000-0000-4000-8000-000000000001", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "POST /chat — pesan biasa",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                "const body = pm.response.json();",
+                "pm.expect(body.status_code).to.eql(201);",
+                "pm.test('Reply selesai atau masuk retry', () => {",
+                "  if (body.data.status === 'processing') {",
+                "    pm.expect(body.data.message).to.eql('Sedang diproses');",
+                "  } else {",
+                "    pm.expect(body.data.reply).to.be.a('string').and.not.empty;",
+                "    pm.expect(body.data.disclaimer_included).to.be.a('boolean');",
+                "  }",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_ibu}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "X-Request-Id", "value": "postman-task-15-chat-regular", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"message\": \"Apa yang perlu saya siapkan sebelum kontrol ke bidan?\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/chat", "host": ["{{base_url}}"], "path": ["chat"] },
+            "description": "Jika AI Service tersedia, response berisi reply. Jika timeout/down, pesan user tetap tersimpan dan response processing dikembalikan sambil retry BullMQ berjalan."
+          }
+        },
+        {
+          "name": "POST /chat — pesan gejala",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                "const chatResult = pm.response.json().data;",
+                "pm.test('Response selesai atau masuk retry', () => {",
+                "  const processing = chatResult.status === 'processing';",
+                "  const completed = typeof chatResult.reply === 'string' && typeof chatResult.disclaimer_included === 'boolean';",
+                "  pm.expect(processing || completed).to.eql(true);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_ibu}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "X-Request-Id", "value": "postman-task-15-chat-symptom", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"message\": \"Saya sering pusing akhir-akhir ini, apakah normal?\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/chat", "host": ["{{base_url}}"], "path": ["chat"] }
+          }
+        },
+        {
+          "name": "GET /chat/history",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const result = pm.response.json().data;",
+                "pm.expect(result.data).to.be.an('array').and.not.empty;",
+                "pm.expect(result.total).to.be.a('number').and.at.least(result.data.length);",
+                "pm.expect(result.data.length).to.be.at.most(20);",
+                "const timestamps = result.data.map((message) => new Date(message.created_at).getTime());",
+                "pm.test('Pesan terurut kronologis', () => pm.expect(timestamps).to.eql([...timestamps].sort((a, b) => a - b)));"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_ibu}}", "type": "text" }],
+            "url": {
+              "raw": "{{base_url}}/chat/history?pregnancy_profile_id={{pregnancy_profile_id}}&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "history"],
+              "query": [
+                { "key": "pregnancy_profile_id", "value": "{{pregnancy_profile_id}}" },
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /chat/history/:id",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const message = pm.response.json().data;",
+                "pm.expect(message.id).to.eql(pm.collectionVariables.get('seeded_chat_message_id'));",
+                "pm.expect(message.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));",
+                "pm.expect(message.sender_type).to.be.oneOf(['user', 'ai']);"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_ibu}}", "type": "text" }],
+            "url": { "raw": "{{base_url}}/chat/history/{{seeded_chat_message_id}}", "host": ["{{base_url}}"], "path": ["chat", "history", "{{seeded_chat_message_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultations",
+      "item": [
+        {
+          "name": "POST /consultations",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                "const consultation = pm.response.json().data;",
+                "pm.expect(consultation.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));",
+                "pm.expect(consultation.status).to.eql('open');",
+                "pm.collectionVariables.set('consultation_id', consultation.id);"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_ibu}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\"\n}" },
+            "url": { "raw": "{{base_url}}/consultations", "host": ["{{base_url}}"], "path": ["consultations"] }
+          }
+        },
+        {
+          "name": "GET /consultations",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const result = pm.response.json().data;",
+                "pm.expect(result.data).to.be.an('array').and.not.empty;",
+                "pm.expect(result.total).to.be.a('number').and.at.least(result.data.length);",
+                "pm.test('Filter open diterapkan', () => result.data.forEach((item) => pm.expect(item.status).to.eql('open')));"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_ibu}}", "type": "text" }],
+            "url": {
+              "raw": "{{base_url}}/consultations?pregnancy_profile_id={{pregnancy_profile_id}}&status=open&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["consultations"],
+              "query": [
+                { "key": "pregnancy_profile_id", "value": "{{pregnancy_profile_id}}" },
+                { "key": "status", "value": "open" },
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /consultations/:id",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const consultation = pm.response.json().data;",
+                "pm.expect(consultation.id).to.eql(pm.collectionVariables.get('consultation_id'));"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_ibu}}", "type": "text" }],
+            "url": { "raw": "{{base_url}}/consultations/{{consultation_id}}", "host": ["{{base_url}}"], "path": ["consultations", "{{consultation_id}}"] }
+          }
+        },
+        {
+          "name": "PATCH /consultations/:id/status",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const consultation = pm.response.json().data;",
+                "pm.expect(consultation.id).to.eql(pm.collectionVariables.get('consultation_id'));",
+                "pm.expect(consultation.status).to.eql('closed');"
+              ]
+            }
+          }],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_bidan}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"closed\"\n}" },
+            "url": { "raw": "{{base_url}}/consultations/{{consultation_id}}/status", "host": ["{{base_url}}"], "path": ["consultations", "{{consultation_id}}", "status"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access Control",
+      "item": [
+        {
+          "name": "POST /chat — profil bukan miliknya",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                "pm.expect(pm.response.json().message.toLowerCase()).to.include('akses');"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_ibu_lain}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n  \"message\": \"Pesan yang tidak boleh terkirim\"\n}" },
+            "url": { "raw": "{{base_url}}/chat", "host": ["{{base_url}}"], "path": ["chat"] }
+          }
+        },
+        {
+          "name": "GET /chat/history — bidan luar wilayah",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('Status code is 403', () => pm.response.to.have.status(403));"]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_bidan_lain}}", "type": "text" }],
+            "url": {
+              "raw": "{{base_url}}/chat/history?pregnancy_profile_id={{pregnancy_profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "history"],
+              "query": [{ "key": "pregnancy_profile_id", "value": "{{pregnancy_profile_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "PATCH consultation — kader ditolak",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('Status code is 403', () => pm.response.to.have.status(403));"]
+            }
+          }],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_kader}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"open\"\n}" },
+            "url": { "raw": "{{base_url}}/consultations/{{consultation_id}}/status", "host": ["{{base_url}}"], "path": ["consultations", "{{consultation_id}}", "status"] }
+          }
+        }
+      ]
+    }
+  ]
+}

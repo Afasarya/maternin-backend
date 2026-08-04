@@ -70,20 +70,24 @@ export class RiskAssessmentsService {
     pregnancyProfileId: string,
     symptomCheckinId: string,
     aiResponse: TriageAnalysisResponse,
+    replaceExisting = false,
   ) {
-    const result = await this.createAssessment({
-      pregnancy_profile_id: pregnancyProfileId,
-      symptom_checkin_id: symptomCheckinId,
-      // Kontrak triage publik hanya menjamin aggregate_score. Nilai itu
-      // dipakai sebagai skor triage bila service belum mengirim skor terpisah.
-      triage_score: aiResponse.triage_score ?? aiResponse.aggregate_score,
-      anemia_probability: aiResponse.anemia_probability,
-      preeclampsia_probability: aiResponse.preeclampsia_probability,
-      aggregate_score: aiResponse.aggregate_score,
-      risk_badge: aiResponse.risk_badge,
-      risk_factors: aiResponse.risk_factors,
-      recommendation_text: aiResponse.recommendation_text,
-    });
+    const result = await this.createAssessment(
+      {
+        pregnancy_profile_id: pregnancyProfileId,
+        symptom_checkin_id: symptomCheckinId,
+        // Kontrak triage publik hanya menjamin aggregate_score. Nilai itu
+        // dipakai sebagai skor triage bila service belum mengirim skor terpisah.
+        triage_score: aiResponse.triage_score ?? aiResponse.aggregate_score,
+        anemia_probability: aiResponse.anemia_probability,
+        preeclampsia_probability: aiResponse.preeclampsia_probability,
+        aggregate_score: aiResponse.aggregate_score,
+        risk_badge: aiResponse.risk_badge,
+        risk_factors: aiResponse.risk_factors,
+        recommendation_text: aiResponse.recommendation_text,
+      },
+      replaceExisting,
+    );
 
     return result.assessment;
   }
@@ -161,7 +165,10 @@ export class RiskAssessmentsService {
     });
   }
 
-  private async createAssessment(input: AssessmentInput) {
+  private async createAssessment(
+    input: AssessmentInput,
+    replaceExisting = false,
+  ) {
     const profile = await this.prisma.pregnancyProfile.findUnique({
       where: { id: input.pregnancy_profile_id },
       select: { user: { select: { puskesmas_id: true } } },
@@ -192,6 +199,43 @@ export class RiskAssessmentsService {
       );
 
       if (existing) {
+        if (replaceExisting) {
+          const assessment = await this.prisma.$transaction(
+            async (transaction) => {
+              const updatedAssessment = await transaction.riskAssessment.update(
+                {
+                  where: { id: existing.id },
+                  data: {
+                    triage_score: input.triage_score,
+                    anemia_probability: input.anemia_probability,
+                    preeclampsia_probability: input.preeclampsia_probability,
+                    aggregate_score: input.aggregate_score,
+                    risk_badge: input.risk_badge,
+                    risk_factors: input.risk_factors,
+                    recommendation_text: input.recommendation_text,
+                    created_at: new Date(),
+                  },
+                },
+              );
+
+              await this.remindersService.updateCadenceOnNewAssessment(
+                input.pregnancy_profile_id,
+                input.risk_badge,
+                transaction,
+              );
+
+              return updatedAssessment;
+            },
+          );
+
+          await this.invalidateCaches(
+            input.pregnancy_profile_id,
+            profile.user.puskesmas_id,
+          );
+
+          return { assessment, created: false };
+        }
+
         await this.invalidateCaches(
           input.pregnancy_profile_id,
           profile.user.puskesmas_id,

@@ -24,6 +24,7 @@ export class TriageRetryProcessor extends WorkerHost {
     return this.symptomCheckinsService.processTriageAnalysis(
       job.data.checkin_id,
       job.data.request_id,
+      job.data.replace_existing_assessment,
     );
   }
 

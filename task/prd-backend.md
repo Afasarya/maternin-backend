@@ -425,6 +425,12 @@ Request `POST /sync/batch`:
 - Kalau baru: insert ke tabel terkait, lalu panggil AI Service pipeline yang sama persis kayak input langsung dari pasien (pakai kontrak section 6).
 - Konflik: **last-write-wins berdasarkan `client_created_at`**.
 
+Klarifikasi konflik dan identitas record:
+- `client_uuid` mengidentifikasi **satu record lokal/logical event**, bukan satu percobaan request. Retry tanpa perubahan wajib mempertahankan `client_uuid` dan `client_created_at` sehingga di-skip idempotent.
+- Last-write-wins hanya terjadi bila record lokal yang sama diedit/dikoreksi di device, tetap memakai `client_uuid` yang sama, lalu dikirim dengan `client_created_at` yang lebih baru. Contoh: ANC lokal UUID `X` dibuat pukul 09:00, sempat tersinkron, lalu kader mengoreksi sistolik record `X` pukul 09:10; versi 09:10 mengganti versi 09:00.
+- Timestamp sama atau lebih lama di-skip. `payload_type` untuk satu `client_uuid` tidak boleh berubah. Kejadian klinis baru wajib memakai `client_uuid` baru, bukan menimpa kejadian lama.
+- Implementasi batch wajib meneruskan payload ke `AncRecordsService.create()` atau `SymptomCheckinsService.create()` agar validasi role, kepemilikan/wilayah, idempotensi resource, dan pipeline AI tidak memiliki jalur bypass terpisah.
+
 ---
 
 ## 8. Auth & role-based access

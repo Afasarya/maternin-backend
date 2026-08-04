@@ -1,0 +1,594 @@
+{
+  "info": {
+    "name": "14 — Sync Offline",
+    "description": "Task 14: batch sync kader untuk ANC dan symptom check-in, idempotensi client_uuid, last-write-wins client_created_at, status per device, retry background, serta kontrol akses. Jalankan request berurutan. Gunakan token kader seed Puskesmas Halmahera agar profil default berada di wilayah yang sama.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token_kader",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_ibu",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_bidan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pregnancy_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "outside_pregnancy_profile_id",
+      "value": "e0000000-0000-4000-8000-000000000003",
+      "type": "string"
+    },
+    {
+      "key": "device_uuid",
+      "value": "device-postman-task-14",
+      "type": "string"
+    },
+    {
+      "key": "anc_client_uuid_1",
+      "value": "a1400000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "anc_client_uuid_2",
+      "value": "a1400000-0000-4000-8000-000000000002",
+      "type": "string"
+    },
+    {
+      "key": "mixed_anc_client_uuid",
+      "value": "a1400000-0000-4000-8000-000000000003",
+      "type": "string"
+    },
+    {
+      "key": "mixed_symptom_client_uuid",
+      "value": "a1400000-0000-4000-8000-000000000004",
+      "type": "string"
+    },
+    {
+      "key": "partial_new_client_uuid",
+      "value": "a1400000-0000-4000-8000-000000000005",
+      "type": "string"
+    },
+    {
+      "key": "invalid_payload_client_uuid",
+      "value": "a1400000-0000-4000-8000-000000000006",
+      "type": "string"
+    },
+    {
+      "key": "valid_after_invalid_client_uuid",
+      "value": "a1400000-0000-4000-8000-000000000007",
+      "type": "string"
+    },
+    {
+      "key": "outside_region_client_uuid",
+      "value": "a1400000-0000-4000-8000-000000000008",
+      "type": "string"
+    },
+    {
+      "key": "batch_created_at",
+      "value": "2026-07-29T08:00:00.000Z",
+      "type": "string"
+    },
+    {
+      "key": "mixed_created_at",
+      "value": "2026-07-29T08:30:00.000Z",
+      "type": "string"
+    },
+    {
+      "key": "partial_created_at",
+      "value": "2026-07-29T08:31:00.000Z",
+      "type": "string"
+    },
+    {
+      "key": "invalid_created_at",
+      "value": "2026-07-29T08:32:00.000Z",
+      "type": "string"
+    },
+    {
+      "key": "valid_after_invalid_created_at",
+      "value": "2026-07-29T08:32:01.000Z",
+      "type": "string"
+    },
+    {
+      "key": "outside_created_at",
+      "value": "2026-07-29T08:33:00.000Z",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Batch Sync",
+      "item": [
+        {
+          "name": "POST /sync/batch — 2 ANC records",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "const now = new Date();",
+                  "pm.collectionVariables.set('device_uuid', `device-task-14-${runId}`);",
+                  "pm.collectionVariables.set('anc_client_uuid_1', pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.collectionVariables.set('anc_client_uuid_2', pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.collectionVariables.set('mixed_anc_client_uuid', pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.collectionVariables.set('mixed_symptom_client_uuid', pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.collectionVariables.set('partial_new_client_uuid', pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.collectionVariables.set('invalid_payload_client_uuid', pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.collectionVariables.set('valid_after_invalid_client_uuid', pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.collectionVariables.set('outside_region_client_uuid', pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.collectionVariables.set('batch_created_at', now.toISOString());",
+                  "pm.collectionVariables.set('mixed_created_at', new Date(now.getTime() + 60000).toISOString());",
+                  "pm.collectionVariables.set('partial_created_at', new Date(now.getTime() + 120000).toISOString());",
+                  "pm.collectionVariables.set('invalid_created_at', new Date(now.getTime() + 180000).toISOString());",
+                  "pm.collectionVariables.set('valid_after_invalid_created_at', new Date(now.getTime() + 181000).toISOString());",
+                  "pm.collectionVariables.set('outside_created_at', new Date(now.getTime() + 240000).toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result).to.include({ total_received: 2, processed: 2, skipped: 0, failed: 0 });",
+                  "pm.expect(result.results).to.have.length(2);",
+                  "pm.test('Dua ANC diproses dan memiliki server_id', () => result.results.forEach((item) => {",
+                  "  pm.expect(item.status).to.eql('processed');",
+                  "  pm.expect(item.server_id).to.be.a('string').and.not.empty;",
+                  "}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "postman-sync-two-anc",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_uuid\": \"{{device_uuid}}\",\n  \"records\": [\n    {\n      \"client_uuid\": \"{{anc_client_uuid_1}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n        \"systolic\": 120,\n        \"diastolic\": 80,\n        \"weight_kg\": 62,\n        \"recorded_at\": \"{{batch_created_at}}\"\n      },\n      \"client_created_at\": \"{{batch_created_at}}\"\n    },\n    {\n      \"client_uuid\": \"{{anc_client_uuid_2}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n        \"systolic\": 124,\n        \"diastolic\": 82,\n        \"weight_kg\": 62.4,\n        \"recorded_at\": \"{{batch_created_at}}\"\n      },\n      \"client_created_at\": \"{{batch_created_at}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/batch",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "batch"]
+            }
+          }
+        },
+        {
+          "name": "POST /sync/batch — 1 ANC + 1 symptom check-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result).to.include({ total_received: 2, processed: 2, skipped: 0, failed: 0 });",
+                  "pm.expect(result.results.map((item) => item.client_uuid)).to.include.members([",
+                  "  pm.collectionVariables.get('mixed_anc_client_uuid'),",
+                  "  pm.collectionVariables.get('mixed_symptom_client_uuid')",
+                  "]);",
+                  "pm.test('Pipeline mixed menghasilkan server_id', () => result.results.forEach((item) => pm.expect(item.server_id).to.be.a('string').and.not.empty));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "postman-sync-mixed",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_uuid\": \"{{device_uuid}}\",\n  \"records\": [\n    {\n      \"client_uuid\": \"{{mixed_anc_client_uuid}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n        \"systolic\": 128,\n        \"diastolic\": 84,\n        \"protein_urine\": \"negatif\",\n        \"recorded_at\": \"{{mixed_created_at}}\"\n      },\n      \"client_created_at\": \"{{mixed_created_at}}\"\n    },\n    {\n      \"client_uuid\": \"{{mixed_symptom_client_uuid}}\",\n      \"payload_type\": \"symptom_checkin\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n        \"checkin_type\": \"pregnancy\",\n        \"answers\": {\n          \"bengkak_kaki\": true,\n          \"sakit_kepala\": \"ringan\"\n        }\n      },\n      \"client_created_at\": \"{{mixed_created_at}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/batch",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "batch"]
+            },
+            "description": "Symptom check-in memakai pipeline Task 07. Bila AI Service down, check-in tetap tersimpan dan retry triage dijadwalkan."
+          }
+        },
+        {
+          "name": "POST /sync/batch — duplicate replay",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result).to.include({ total_received: 2, processed: 0, skipped: 2, failed: 0 });",
+                  "pm.test('Semua replay di-skip sebagai duplicate', () => result.results.forEach((item) => {",
+                  "  pm.expect(item.status).to.eql('skipped');",
+                  "  pm.expect(item.reason).to.eql('duplicate');",
+                  "}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_uuid\": \"{{device_uuid}}\",\n  \"records\": [\n    {\n      \"client_uuid\": \"{{anc_client_uuid_1}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n        \"systolic\": 120,\n        \"diastolic\": 80,\n        \"weight_kg\": 62,\n        \"recorded_at\": \"{{batch_created_at}}\"\n      },\n      \"client_created_at\": \"{{batch_created_at}}\"\n    },\n    {\n      \"client_uuid\": \"{{anc_client_uuid_2}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n        \"systolic\": 124,\n        \"diastolic\": 82,\n        \"weight_kg\": 62.4,\n        \"recorded_at\": \"{{batch_created_at}}\"\n      },\n      \"client_created_at\": \"{{batch_created_at}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/batch",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "batch"]
+            }
+          }
+        },
+        {
+          "name": "POST /sync/batch — 1 new + 1 duplicate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result).to.include({ total_received: 2, processed: 1, skipped: 1, failed: 0 });",
+                  "const duplicate = result.results.find((item) => item.client_uuid === pm.collectionVariables.get('anc_client_uuid_1'));",
+                  "const inserted = result.results.find((item) => item.client_uuid === pm.collectionVariables.get('partial_new_client_uuid'));",
+                  "pm.expect(duplicate).to.include({ status: 'skipped', reason: 'duplicate' });",
+                  "pm.expect(inserted.status).to.eql('processed');",
+                  "pm.expect(inserted.server_id).to.be.a('string').and.not.empty;"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_uuid\": \"{{device_uuid}}\",\n  \"records\": [\n    {\n      \"client_uuid\": \"{{anc_client_uuid_1}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n        \"systolic\": 120,\n        \"diastolic\": 80,\n        \"weight_kg\": 62,\n        \"recorded_at\": \"{{batch_created_at}}\"\n      },\n      \"client_created_at\": \"{{batch_created_at}}\"\n    },\n    {\n      \"client_uuid\": \"{{partial_new_client_uuid}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n        \"systolic\": 126,\n        \"diastolic\": 83,\n        \"recorded_at\": \"{{partial_created_at}}\"\n      },\n      \"client_created_at\": \"{{partial_created_at}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/batch",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "batch"]
+            }
+          }
+        },
+        {
+          "name": "POST /sync/batch — invalid payload isolated",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result).to.include({ total_received: 2, processed: 1, skipped: 0, failed: 1 });",
+                  "const invalid = result.results.find((item) => item.client_uuid === pm.collectionVariables.get('invalid_payload_client_uuid'));",
+                  "const valid = result.results.find((item) => item.client_uuid === pm.collectionVariables.get('valid_after_invalid_client_uuid'));",
+                  "pm.expect(invalid.status).to.eql('failed');",
+                  "pm.expect(invalid.reason).to.include('tidak valid');",
+                  "pm.expect(valid.status).to.eql('processed');",
+                  "pm.expect(valid.server_id).to.be.a('string').and.not.empty;"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_uuid\": \"{{device_uuid}}\",\n  \"records\": [\n    {\n      \"client_uuid\": \"{{invalid_payload_client_uuid}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"systolic\": 130,\n        \"diastolic\": 85\n      },\n      \"client_created_at\": \"{{invalid_created_at}}\"\n    },\n    {\n      \"client_uuid\": \"{{valid_after_invalid_client_uuid}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\",\n        \"systolic\": 118,\n        \"diastolic\": 78,\n        \"recorded_at\": \"{{valid_after_invalid_created_at}}\"\n      },\n      \"client_created_at\": \"{{valid_after_invalid_created_at}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/batch",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "batch"]
+            },
+            "description": "Record pertama sengaja kehilangan pregnancy_profile_id. Validasi subtype terjadi per record di SyncService; record kedua tetap diproses."
+          }
+        },
+        {
+          "name": "POST /sync/batch — empty records array",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result).to.eql({ total_received: 0, processed: 0, skipped: 0, failed: 0, results: [] });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_uuid\": \"{{device_uuid}}\",\n  \"records\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/batch",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "batch"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Status",
+      "item": [
+        {
+          "name": "GET /sync/status?device_uuid=...",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const status = pm.response.json().data;",
+                  "pm.expect(status.device_uuid).to.eql(pm.collectionVariables.get('device_uuid'));",
+                  "pm.expect(status).to.include({ total: 7, processed: 6, pending: 0, failed: 1 });",
+                  "pm.expect(status.last_sync).to.be.an('object');",
+                  "pm.expect(status.last_sync.status).to.eql('processed');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sync/status?device_uuid={{device_uuid}}",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "status"],
+              "query": [
+                {
+                  "key": "device_uuid",
+                  "value": "{{device_uuid}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access Control",
+      "item": [
+        {
+          "name": "POST /sync/batch — kader luar wilayah gagal per record",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201 because sync_queue record is created', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json().data;",
+                  "pm.expect(result).to.include({ total_received: 1, processed: 0, skipped: 0, failed: 1 });",
+                  "pm.expect(result.results[0].client_uuid).to.eql(pm.collectionVariables.get('outside_region_client_uuid'));",
+                  "pm.expect(result.results[0].status).to.eql('failed');",
+                  "pm.expect(result.results[0].reason.toLowerCase()).to.include('akses');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kader}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_uuid\": \"{{device_uuid}}\",\n  \"records\": [\n    {\n      \"client_uuid\": \"{{outside_region_client_uuid}}\",\n      \"payload_type\": \"anc_record\",\n      \"payload\": {\n        \"pregnancy_profile_id\": \"{{outside_pregnancy_profile_id}}\",\n        \"systolic\": 120,\n        \"diastolic\": 80,\n        \"recorded_at\": \"{{outside_created_at}}\"\n      },\n      \"client_created_at\": \"{{outside_created_at}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/batch",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "batch"]
+            },
+            "description": "Kader seed Halmahera mencoba menulis profil seed Pandanaran. AncRecordsService.create() harus menolak scoping wilayah; SyncService mengisolasi kegagalan sebagai hasil per record."
+          }
+        },
+        {
+          "name": "POST /sync/batch — token bidan ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bidan}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_uuid\": \"{{device_uuid}}\",\n  \"records\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/batch",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "batch"]
+            },
+            "description": "PRD section 5.1 dan section 8 menetapkan batch sync sebagai jalur write kader, bukan bidan."
+          }
+        },
+        {
+          "name": "POST /sync/batch — token ibu_hamil ditolak",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_ibu}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_uuid\": \"{{device_uuid}}\",\n  \"records\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sync/batch",
+              "host": ["{{base_url}}"],
+              "path": ["sync", "batch"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

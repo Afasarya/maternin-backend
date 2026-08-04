@@ -49,6 +49,7 @@ describe('AncRecordsService', () => {
   const prisma = {
     ancRecord: {
       create: jest.fn(),
+      update: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -204,6 +205,51 @@ describe('AncRecordsService', () => {
 
       expect(prisma.ancRecord.findFirst).toHaveBeenCalledWith({
         where: { client_uuid: clientUuid },
+      });
+      expect(prisma.ancRecord.create).not.toHaveBeenCalled();
+    });
+
+    it('replaces an existing offline record for an explicit LWW request', async () => {
+      const updatedRecord = {
+        ...record,
+        recorded_by_user_id: staffId,
+        source: AncSource.KADER_OFFLINE,
+        systolic: 135,
+        recorded_at: new Date('2026-07-24T11:00:00.000Z'),
+      };
+      prisma.ancRecord.findFirst.mockResolvedValue(record);
+      prisma.ancRecord.update.mockResolvedValue(updatedRecord);
+
+      await expect(
+        service.create(
+          {
+            pregnancy_profile_id: profileId,
+            systolic: 135,
+            recorded_at: '2026-07-24T11:00:00.000Z',
+            client_uuid: clientUuid,
+          },
+          {
+            id: staffId,
+            role: UserRole.KADER,
+            puskesmas_id: puskesmasId,
+          },
+          { replaceExisting: true },
+        ),
+      ).resolves.toEqual({ record: updatedRecord, created: false });
+
+      expect(prisma.ancRecord.update).toHaveBeenCalledWith({
+        where: { id: recordId },
+        data: {
+          recorded_by_user_id: staffId,
+          source: AncSource.KADER_OFFLINE,
+          systolic: 135,
+          diastolic: null,
+          weight_kg: null,
+          fundal_height_cm: null,
+          protein_urine: null,
+          platelet_count: null,
+          recorded_at: new Date('2026-07-24T11:00:00.000Z'),
+        },
       });
       expect(prisma.ancRecord.create).not.toHaveBeenCalled();
     });
