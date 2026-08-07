@@ -6,7 +6,7 @@ import {
   BleedingLevel,
   ChatSenderType,
   CheckinType,
-  ConsultationStatus,
+  SupportSessionStatus,
   MoodFlag,
   NotificationChannel,
   NotificationStatus,
@@ -434,7 +434,7 @@ const consultationSeeds = [
   {
     id: '94000000-0000-4000-8000-000000000001',
     pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
-    status: ConsultationStatus.open,
+    status: SupportSessionStatus.open,
   },
 ] as const;
 
@@ -584,7 +584,7 @@ async function main() {
 
     await prisma.$transaction(
       consultationSeeds.map(({ id, ...data }) =>
-        prisma.consultation.upsert({
+        prisma.supportSession.upsert({
           where: { id },
           update: data,
           create: { id, ...data },
@@ -653,7 +653,7 @@ async function main() {
       prisma.notificationLog.count({
         where: { id: { in: notificationLogSeeds.map(({ id }) => id) } },
       }),
-      prisma.consultation.count({
+      prisma.supportSession.count({
         where: { id: { in: consultationSeeds.map(({ id }) => id) } },
       }),
       prisma.chatMessage.count({

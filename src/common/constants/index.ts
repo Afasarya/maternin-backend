@@ -8,6 +8,7 @@ export enum UserRole {
   BIDAN = 'bidan',
   KADER = 'kader',
   ADMIN = 'admin',
+  DOKTER = 'dokter',
 }
 
 export enum PregnancyStatus {
@@ -107,6 +108,35 @@ export enum ChatSenderType {
 }
 
 export enum ConsultationStatus {
+  PENDING_PAYMENT = 'pending_payment',
+  SCHEDULED = 'scheduled',
+  ONGOING = 'ongoing',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+  EXPIRED = 'expired',
+}
+
+export enum SupportSessionStatus {
   OPEN = 'open',
   CLOSED = 'closed',
+}
+export enum DayOfWeek {
+  SENIN = 'senin',
+  SELASA = 'selasa',
+  RABU = 'rabu',
+  KAMIS = 'kamis',
+  JUMAT = 'jumat',
+  SABTU = 'sabtu',
+  MINGGU = 'minggu',
+}
+export enum PaymentStatus {
+  PENDING = 'pending',
+  PAID = 'paid',
+  EXPIRED = 'expired',
+  FAILED = 'failed',
+  REFUNDED = 'refunded',
+}
+export enum ConsultationSenderType {
+  PATIENT = 'patient',
+  DOCTOR = 'doctor',
 }

@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "15 — Chat & Consultations",
+    "name": "15 — Chat & Support Sessions",
     "description": "Task 15: proxy chatbot AI dengan tracing dan retry timeout, histori kronologis, session konsultasi dasar, pagination, serta kontrol akses. Jalankan seed. Isi token akun dummy sesuai role.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -14,7 +14,7 @@
     { "key": "token_kader", "value": "", "type": "string" },
     { "key": "pregnancy_profile_id", "value": "e0000000-0000-4000-8000-000000000001", "type": "string" },
     { "key": "seeded_chat_message_id", "value": "93000000-0000-4000-8000-000000000001", "type": "string" },
-    { "key": "consultation_id", "value": "94000000-0000-4000-8000-000000000001", "type": "string" }
+    { "key": "support_session_id", "value": "94000000-0000-4000-8000-000000000001", "type": "string" }
   ],
   "item": [
     {
@@ -143,20 +143,20 @@
       ]
     },
     {
-      "name": "Consultations",
+      "name": "Support Sessions",
       "item": [
         {
-          "name": "POST /consultations",
+          "name": "POST /support-sessions",
           "event": [{
             "listen": "test",
             "script": {
               "type": "text/javascript",
               "exec": [
                 "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
-                "const consultation = pm.response.json().data;",
-                "pm.expect(consultation.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));",
-                "pm.expect(consultation.status).to.eql('open');",
-                "pm.collectionVariables.set('consultation_id', consultation.id);"
+                "const session = pm.response.json().data;",
+                "pm.expect(session.pregnancy_profile_id).to.eql(pm.collectionVariables.get('pregnancy_profile_id'));",
+                "pm.expect(session.status).to.eql('open');",
+                "pm.collectionVariables.set('support_session_id', session.id);"
               ]
             }
           }],
@@ -167,11 +167,11 @@
               { "key": "Content-Type", "value": "application/json", "type": "text" }
             ],
             "body": { "mode": "raw", "raw": "{\n  \"pregnancy_profile_id\": \"{{pregnancy_profile_id}}\"\n}" },
-            "url": { "raw": "{{base_url}}/consultations", "host": ["{{base_url}}"], "path": ["consultations"] }
+            "url": { "raw": "{{base_url}}/support-sessions", "host": ["{{base_url}}"], "path": ["support-sessions"] }
           }
         },
         {
-          "name": "GET /consultations",
+          "name": "GET /support-sessions",
           "event": [{
             "listen": "test",
             "script": {
@@ -189,9 +189,9 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token_ibu}}", "type": "text" }],
             "url": {
-              "raw": "{{base_url}}/consultations?pregnancy_profile_id={{pregnancy_profile_id}}&status=open&limit=20&offset=0",
+              "raw": "{{base_url}}/support-sessions?pregnancy_profile_id={{pregnancy_profile_id}}&status=open&limit=20&offset=0",
               "host": ["{{base_url}}"],
-              "path": ["consultations"],
+              "path": ["support-sessions"],
               "query": [
                 { "key": "pregnancy_profile_id", "value": "{{pregnancy_profile_id}}" },
                 { "key": "status", "value": "open" },
@@ -202,35 +202,35 @@
           }
         },
         {
-          "name": "GET /consultations/:id",
+          "name": "GET /support-sessions/:id",
           "event": [{
             "listen": "test",
             "script": {
               "type": "text/javascript",
               "exec": [
                 "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
-                "const consultation = pm.response.json().data;",
-                "pm.expect(consultation.id).to.eql(pm.collectionVariables.get('consultation_id'));"
+                "const session = pm.response.json().data;",
+                "pm.expect(session.id).to.eql(pm.collectionVariables.get('support_session_id'));"
               ]
             }
           }],
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token_ibu}}", "type": "text" }],
-            "url": { "raw": "{{base_url}}/consultations/{{consultation_id}}", "host": ["{{base_url}}"], "path": ["consultations", "{{consultation_id}}"] }
+            "url": { "raw": "{{base_url}}/support-sessions/{{support_session_id}}", "host": ["{{base_url}}"], "path": ["support-sessions", "{{support_session_id}}"] }
           }
         },
         {
-          "name": "PATCH /consultations/:id/status",
+          "name": "PATCH /support-sessions/:id/status",
           "event": [{
             "listen": "test",
             "script": {
               "type": "text/javascript",
               "exec": [
                 "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
-                "const consultation = pm.response.json().data;",
-                "pm.expect(consultation.id).to.eql(pm.collectionVariables.get('consultation_id'));",
-                "pm.expect(consultation.status).to.eql('closed');"
+                "const session = pm.response.json().data;",
+                "pm.expect(session.id).to.eql(pm.collectionVariables.get('support_session_id'));",
+                "pm.expect(session.status).to.eql('closed');"
               ]
             }
           }],
@@ -241,7 +241,7 @@
               { "key": "Content-Type", "value": "application/json", "type": "text" }
             ],
             "body": { "mode": "raw", "raw": "{\n  \"status\": \"closed\"\n}" },
-            "url": { "raw": "{{base_url}}/consultations/{{consultation_id}}/status", "host": ["{{base_url}}"], "path": ["consultations", "{{consultation_id}}", "status"] }
+            "url": { "raw": "{{base_url}}/support-sessions/{{support_session_id}}/status", "host": ["{{base_url}}"], "path": ["support-sessions", "{{support_session_id}}", "status"] }
           }
         }
       ]
@@ -292,7 +292,7 @@
           }
         },
         {
-          "name": "PATCH consultation — kader ditolak",
+          "name": "PATCH support session — kader ditolak",
           "event": [{
             "listen": "test",
             "script": {
@@ -307,7 +307,7 @@
               { "key": "Content-Type", "value": "application/json", "type": "text" }
             ],
             "body": { "mode": "raw", "raw": "{\n  \"status\": \"open\"\n}" },
-            "url": { "raw": "{{base_url}}/consultations/{{consultation_id}}/status", "host": ["{{base_url}}"], "path": ["consultations", "{{consultation_id}}", "status"] }
+            "url": { "raw": "{{base_url}}/support-sessions/{{support_session_id}}/status", "host": ["{{base_url}}"], "path": ["support-sessions", "{{support_session_id}}", "status"] }
           }
         }
       ]

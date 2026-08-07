@@ -11,6 +11,10 @@ import { AuthModule } from './auth/auth.module.js';
 import { BidanModule } from './bidan/bidan.module.js';
 import { ChatModule } from './chat/chat.module.js';
 import { ConsultationsModule } from './consultations/consultations.module.js';
+import { DoctorsModule } from './doctors/doctors.module.js';
+import { DoctorSchedulesModule } from './doctor-schedules/doctor-schedules.module.js';
+import { PaymentsModule } from './payments/payments.module.js';
+import { SupportSessionsModule } from './support-sessions/support-sessions.module.js';
 import { FacilitiesModule } from './facilities/facilities.module.js';
 import { FamilyCircleModule } from './family-circle/family-circle.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
@@ -38,6 +42,9 @@ import { SyncModule } from './sync/sync.module.js';
         NOMINATIM_BASE_URL: Joi.string()
           .uri()
           .default('https://nominatim.openstreetmap.org'),
+        XENDIT_SECRET_KEY: Joi.string().required(),
+        XENDIT_WEBHOOK_TOKEN: Joi.string().required(),
+        CONSULTATION_PLATFORM_FEE: Joi.number().min(0).required(),
       }),
     }),
 
@@ -109,6 +116,10 @@ import { SyncModule } from './sync/sync.module.js';
 
     // ─── Basic consultation session management ───
     ConsultationsModule,
+    SupportSessionsModule,
+    DoctorsModule,
+    DoctorSchedulesModule,
+    PaymentsModule,
 
     // ─── Monthly MDSR operational report export ───
     ReportsModule,

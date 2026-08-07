@@ -13,6 +13,7 @@ enum UserRole {
   bidan
   kader
   admin
+  dokter
 }
 
 enum PregnancyStatus {
@@ -111,9 +112,41 @@ enum ChatSenderType {
   ai
 }
 
-enum ConsultationStatus {
+enum SupportSessionStatus {
   open
   closed
+}
+
+enum DayOfWeek {
+  senin
+  selasa
+  rabu
+  kamis
+  jumat
+  sabtu
+  minggu
+}
+
+enum ConsultationStatus {
+  pending_payment
+  scheduled
+  ongoing
+  completed
+  cancelled
+  expired
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  expired
+  failed
+  refunded
+}
+
+enum ConsultationSenderType {
+  patient
+  doctor
 }
 
 model User {
@@ -130,6 +163,8 @@ model User {
   puskesmas          Puskesmas?         @relation(fields: [puskesmas_id], references: [id])
   pregnancy_profiles PregnancyProfile[]
   anc_records        AncRecord[]        @relation("RecordedBy")
+  doctor             Doctor?
+  consultation_messages ConsultationMessage[]
 
   @@index([puskesmas_id])
   @@map("users")
@@ -158,6 +193,7 @@ model PregnancyProfile {
   family_circles   FamilyCircle[]
   notifications    NotificationLog[]
   reminders        Reminder[]
+  support_sessions SupportSession[]
   consultations    Consultation[]
   chat_messages    ChatMessage[]
 
@@ -320,17 +356,99 @@ model SyncQueue {
   @@map("sync_queue")
 }
 
-model Consultation {
-  id                   String             @id @default(uuid()) @db.Uuid
+model SupportSession {
+  id                   String               @id @default(uuid()) @db.Uuid
   pregnancy_profile_id String             @db.Uuid
-  status               ConsultationStatus @default(open)
+  status               SupportSessionStatus @default(open)
   created_at           DateTime           @default(now())
   updated_at           DateTime           @updatedAt
 
   pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id])
 
   @@index([pregnancy_profile_id, created_at])
+  @@map("support_sessions")
+}
+
+model Doctor {
+  id             String   @id @default(uuid()) @db.Uuid
+  user_id        String   @unique @db.Uuid
+  specialization String
+  str_number     String?
+  price          Decimal  @db.Decimal(10, 2)
+  bio            String?
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  user          User             @relation(fields: [user_id], references: [id])
+  schedules     DoctorSchedule[]
+  consultations Consultation[]
+
+  @@map("doctors")
+}
+
+model DoctorSchedule {
+  id          String    @id @default(uuid()) @db.Uuid
+  doctor_id   String    @db.Uuid
+  day_of_week DayOfWeek
+  start_time  String
+  end_time    String
+
+  doctor Doctor @relation(fields: [doctor_id], references: [id], onDelete: Cascade)
+
+  @@index([doctor_id, day_of_week])
+  @@map("doctor_schedules")
+}
+
+model Consultation {
+  id                     String             @id @default(uuid()) @db.Uuid
+  pregnancy_profile_id   String             @db.Uuid
+  doctor_id              String             @db.Uuid
+  scheduled_at           DateTime
+  price_snapshot         Decimal            @db.Decimal(10, 2)
+  platform_fee           Decimal            @db.Decimal(10, 2)
+  status                 ConsultationStatus @default(pending_payment)
+  created_at             DateTime           @default(now())
+  updated_at             DateTime           @updatedAt
+
+  pregnancy_profile PregnancyProfile     @relation(fields: [pregnancy_profile_id], references: [id])
+  doctor             Doctor               @relation(fields: [doctor_id], references: [id])
+  payment            Payment?
+  messages           ConsultationMessage[]
+
+  @@index([pregnancy_profile_id, created_at])
+  @@index([doctor_id, scheduled_at])
   @@map("consultations")
+}
+
+model Payment {
+  id                  String        @id @default(uuid()) @db.Uuid
+  consultation_id     String        @unique @db.Uuid
+  xendit_invoice_id   String        @unique
+  amount              Decimal       @db.Decimal(10, 2)
+  status              PaymentStatus @default(pending)
+  paid_at             DateTime?
+  xendit_payload      Json?
+  created_at          DateTime      @default(now())
+
+  consultation Consultation @relation(fields: [consultation_id], references: [id])
+
+  @@map("payments")
+}
+
+model ConsultationMessage {
+  id               String                 @id @default(uuid()) @db.Uuid
+  consultation_id  String                 @db.Uuid
+  sender_type       ConsultationSenderType
+  sender_user_id    String                 @db.Uuid
+  message           String
+  created_at        DateTime               @default(now())
+
+  consultation Consultation @relation(fields: [consultation_id], references: [id])
+  sender       User         @relation(fields: [sender_user_id], references: [id])
+
+  @@index([consultation_id, created_at])
+  @@map("consultation_messages")
 }
 
 model ChatMessage {

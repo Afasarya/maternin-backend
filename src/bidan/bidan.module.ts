@@ -8,5 +8,6 @@ import { BidanService } from './bidan.service.js';
   imports: [PregnancyProfilesModule],
   controllers: [BidanController],
   providers: [BidanService, BidanCacheService],
+  exports: [BidanService],
 })
 export class BidanModule {}

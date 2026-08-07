@@ -1,119 +1,289 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { Prisma } from '../../generated/prisma/client.js';
-import { ConsultationStatus, UserRole } from '../common/constants/index.js';
+import { ConsultationStatus as PrismaConsultationStatus } from '../../generated/prisma/enums.js';
+import {
+  ConsultationSenderType,
+  ConsultationStatus,
+  UserRole,
+} from '../common/constants/index.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
-import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
+import { BidanService } from '../bidan/bidan.service.js';
+import { DoctorsService } from '../doctors/doctors.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { CreateConsultationDto } from './dto/create-consultation.dto.js';
 
-interface ConsultationFilters {
-  status?: ConsultationStatus;
-  limit: number;
-  offset: number;
-}
-
+const dayNames = [
+  'minggu',
+  'senin',
+  'selasa',
+  'rabu',
+  'kamis',
+  'jumat',
+  'sabtu',
+] as const;
 @Injectable()
 export class ConsultationsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly pregnancyProfilesService: PregnancyProfilesService,
+    private readonly config: ConfigService,
+    private readonly http: HttpService,
+    private readonly doctors: DoctorsService,
+    private readonly bidan: BidanService,
   ) {}
-
-  async create(dto: CreateConsultationDto, requester: CurrentUserData) {
-    const profile = await this.pregnancyProfilesService.findOne(
-      dto.pregnancy_profile_id,
-    );
-
+  async create(
+    dto: {
+      pregnancy_profile_id: string;
+      doctor_id: string;
+      scheduled_at: string;
+    },
+    user: CurrentUserData,
+  ) {
+    const profile = await this.prisma.pregnancyProfile.findUnique({
+      where: { id: dto.pregnancy_profile_id },
+    });
+    if (!profile)
+      throw new NotFoundException('Profil kehamilan tidak ditemukan');
+    if (profile.user_id !== user.id)
+      throw new ForbiddenException('Profil kehamilan bukan milik pengguna');
+    const doctor = await this.doctors.findOne(dto.doctor_id);
+    const scheduled = new Date(dto.scheduled_at);
+    if (Number.isNaN(scheduled.getTime()) || scheduled <= new Date())
+      throw new BadRequestException('Jadwal konsultasi tidak valid');
+    const hhmm = scheduled.toLocaleTimeString('en-GB', {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const dow =
+      dayNames[
+        Number(
+          new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Jakarta',
+            weekday: 'short',
+          })
+            .formatToParts(scheduled)
+            .find((x) => x.type === 'weekday')
+            ? scheduled.toLocaleString('en-US', {
+                timeZone: 'Asia/Jakarta',
+                weekday: 'short',
+              }) === 'Sun'
+              ? 0
+              : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(
+                  scheduled.toLocaleString('en-US', {
+                    timeZone: 'Asia/Jakarta',
+                    weekday: 'short',
+                  }),
+                ) + 1
+            : scheduled.getUTCDay(),
+        )
+      ];
     if (
-      requester.role !== UserRole.IBU_HAMIL ||
-      profile.user_id !== requester.id
-    ) {
-      throw new ForbiddenException(
-        'Tidak memiliki akses untuk membuat konsultasi',
-      );
-    }
-
-    return this.prisma.consultation.create({
-      data: {
-        pregnancy_profile_id: dto.pregnancy_profile_id,
-        status: ConsultationStatus.OPEN,
+      !doctor.schedules.some(
+        (s) =>
+          s.day_of_week === dow && s.start_time <= hhmm && s.end_time > hhmm,
+      )
+    )
+      throw new BadRequestException('Jadwal di luar ketersediaan dokter');
+    const clash = await this.prisma.consultation.findFirst({
+      where: {
+        doctor_id: dto.doctor_id,
+        scheduled_at: scheduled,
+        status: {
+          notIn: [ConsultationStatus.CANCELLED, ConsultationStatus.EXPIRED],
+        },
       },
     });
-  }
-
-  async findByProfile(
-    profileId: string,
-    filters: ConsultationFilters,
-    requester: CurrentUserData,
-  ) {
-    await this.pregnancyProfilesService.findOne(profileId, requester);
-    const where: Prisma.ConsultationWhereInput = {
-      pregnancy_profile_id: profileId,
-      ...(filters.status && { status: filters.status }),
-    };
-    const [data, total] = await this.prisma.$transaction([
-      this.prisma.consultation.findMany({
-        where,
-        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-        skip: filters.offset,
-        take: filters.limit,
-      }),
-      this.prisma.consultation.count({ where }),
-    ]);
-
-    return { data, total };
-  }
-
-  async findOne(id: string, requester: CurrentUserData) {
-    const consultation = await this.findConsultation(id);
-
-    await this.pregnancyProfilesService.findOne(
-      consultation.pregnancy_profile_id,
-      requester,
+    if (clash) throw new ConflictException('Slot konsultasi sudah dibooking');
+    const fee = new Prisma.Decimal(
+      this.config.getOrThrow<string>('CONSULTATION_PLATFORM_FEE'),
     );
-    return consultation;
-  }
-
-  async updateStatus(
-    id: string,
-    status: ConsultationStatus,
-    requester: CurrentUserData,
-  ) {
-    const consultation = await this.findConsultation(id);
-
-    if (
-      requester.role === UserRole.IBU_HAMIL ||
-      requester.role === UserRole.BIDAN
-    ) {
-      await this.pregnancyProfilesService.findOne(
-        consultation.pregnancy_profile_id,
-        requester,
+    const total = doctor.price.add(fee);
+    const consultation = await this.prisma.consultation.create({
+      data: {
+        pregnancy_profile_id: dto.pregnancy_profile_id,
+        doctor_id: dto.doctor_id,
+        scheduled_at: scheduled,
+        price_snapshot: doctor.price,
+        platform_fee: fee,
+      },
+    });
+    try {
+      const key = this.config.getOrThrow<string>('XENDIT_SECRET_KEY');
+      const response = await firstValueFrom(
+        this.http.post(
+          'https://api.xendit.co/v2/invoices',
+          {
+            external_id: consultation.id,
+            amount: total.toNumber(),
+            invoice_duration: 3600,
+            description: `Konsultasi dokter ${consultation.id}`,
+          },
+          { auth: { username: key, password: '' } },
+        ),
       );
-    } else if (requester.role !== UserRole.ADMIN) {
-      throw new ForbiddenException(
-        'Tidak memiliki akses untuk mengubah status konsultasi',
-      );
+      const invoice = response.data as { id: string; invoice_url: string };
+      await this.prisma.payment.create({
+        data: {
+          consultation_id: consultation.id,
+          xendit_invoice_id: invoice.id,
+          amount: total,
+        },
+      });
+      return {
+        ...consultation,
+        payment_url: invoice.invoice_url,
+        total_amount: total,
+      };
+    } catch (error) {
+      await this.prisma.consultation.delete({ where: { id: consultation.id } });
+      throw new BadRequestException('Gagal membuat invoice pembayaran', {
+        cause: error,
+      });
     }
-
+  }
+  async listPatient(
+    status: ConsultationStatus | undefined,
+    user: CurrentUserData,
+  ) {
+    return this.prisma.consultation.findMany({
+      where: {
+        pregnancy_profile: { user_id: user.id },
+        ...(status && { status }),
+      },
+      include: {
+        doctor: { include: { user: { select: { full_name: true } } } },
+        payment: true,
+      },
+      orderBy: { created_at: 'desc' },
+    });
+  }
+  async listDoctor(user: CurrentUserData) {
+    const doctor = await this.doctors.findByUser(user.id);
+    return this.prisma.consultation.findMany({
+      where: { doctor_id: doctor.id },
+      include: {
+        pregnancy_profile: {
+          include: { user: { select: { full_name: true } } },
+        },
+        payment: true,
+      },
+      orderBy: { scheduled_at: 'desc' },
+    });
+  }
+  listAdmin() {
+    return this.prisma.consultation.findMany({
+      include: {
+        doctor: { include: { user: { select: { full_name: true } } } },
+        pregnancy_profile: {
+          include: { user: { select: { full_name: true } } },
+        },
+        payment: true,
+      },
+      orderBy: { created_at: 'desc' },
+    });
+  }
+  async detail(id: string, user: CurrentUserData) {
+    const c = await this.getAuthorized(id, user);
+    return user.role === UserRole.DOKTER
+      ? {
+          ...c,
+          medical_summary: await this.bidan.getVisitBrief(
+            c.pregnancy_profile_id,
+            { ...user, role: UserRole.ADMIN },
+          ),
+        }
+      : c;
+  }
+  async cancel(id: string, user: CurrentUserData) {
+    const c = await this.getAuthorized(id, user);
+    if (
+      user.role !== UserRole.IBU_HAMIL ||
+      c.status !== PrismaConsultationStatus.pending_payment
+    )
+      throw new BadRequestException(
+        'Hanya pembayaran pending yang dapat dibatalkan',
+      );
     return this.prisma.consultation.update({
       where: { id },
-      data: { status },
+      data: { status: ConsultationStatus.CANCELLED },
     });
   }
-
-  private async findConsultation(id: string) {
-    const consultation = await this.prisma.consultation.findUnique({
+  async complete(id: string, user: CurrentUserData) {
+    const c = await this.getAuthorized(id, user);
+    if (
+      user.role !== UserRole.DOKTER ||
+      (c.status !== PrismaConsultationStatus.scheduled &&
+        c.status !== PrismaConsultationStatus.ongoing)
+    )
+      throw new BadRequestException('Konsultasi belum dapat diselesaikan');
+    return this.prisma.consultation.update({
       where: { id },
+      data: { status: ConsultationStatus.COMPLETED },
     });
-
-    if (!consultation) {
-      throw new NotFoundException('Konsultasi tidak ditemukan');
-    }
-
-    return consultation;
+  }
+  async messages(
+    id: string,
+    limit: number,
+    offset: number,
+    user: CurrentUserData,
+  ) {
+    await this.getAuthorized(id, user);
+    return this.prisma.consultationMessage.findMany({
+      where: { consultation_id: id },
+      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+      take: limit,
+      skip: offset,
+    });
+  }
+  async send(id: string, message: string, user: CurrentUserData) {
+    const c = await this.getAuthorized(id, user);
+    if (
+      c.status !== PrismaConsultationStatus.scheduled &&
+      c.status !== PrismaConsultationStatus.ongoing
+    )
+      throw new BadRequestException('Chat belum aktif');
+    const result = await this.prisma.$transaction(async (tx) => {
+      if (c.status === PrismaConsultationStatus.scheduled)
+        await tx.consultation.update({
+          where: { id },
+          data: { status: ConsultationStatus.ONGOING },
+        });
+      return tx.consultationMessage.create({
+        data: {
+          consultation_id: id,
+          sender_user_id: user.id,
+          sender_type:
+            user.role === UserRole.DOKTER
+              ? ConsultationSenderType.DOCTOR
+              : ConsultationSenderType.PATIENT,
+          message,
+        },
+      });
+    });
+    return result;
+  }
+  private async getAuthorized(id: string, user: CurrentUserData) {
+    const c = await this.prisma.consultation.findUnique({
+      where: { id },
+      include: { pregnancy_profile: true, doctor: true, payment: true },
+    });
+    if (!c) throw new NotFoundException('Konsultasi tidak ditemukan');
+    const allowed =
+      user.role === UserRole.ADMIN ||
+      (user.role === UserRole.IBU_HAMIL &&
+        c.pregnancy_profile.user_id === user.id) ||
+      (user.role === UserRole.DOKTER && c.doctor.user_id === user.id);
+    if (!allowed)
+      throw new ForbiddenException('Tidak memiliki akses ke konsultasi');
+    return c;
   }
 }
