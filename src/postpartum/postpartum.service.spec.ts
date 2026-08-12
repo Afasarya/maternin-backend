@@ -15,6 +15,7 @@ import { AiServiceClient } from '../common/services/ai-service.client.js';
 import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RemindersService } from '../reminders/reminders.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { PostpartumLogSort } from './dto/query-postpartum-logs.dto.js';
 import { POSTPARTUM_RETRY_JOB } from './postpartum.constants.js';
 import {
@@ -98,6 +99,7 @@ describe('PostpartumService', () => {
       update: jest.fn(),
     },
     $transaction: jest.fn(),
+    user: { findFirst: jest.fn() },
   };
   const aiServiceClient = {
     evaluatePostpartum: jest.fn(),
@@ -111,11 +113,13 @@ describe('PostpartumService', () => {
   const postpartumRetryQueue = {
     add: jest.fn(),
   };
+  const notificationsService = { sendNotification: jest.fn() };
   const service = new PostpartumService(
     prisma as unknown as PrismaService,
     aiServiceClient as unknown as AiServiceClient,
     pregnancyProfilesService as unknown as PregnancyProfilesService,
     remindersService as unknown as RemindersService,
+    notificationsService as unknown as NotificationsService,
     postpartumRetryQueue as unknown as Queue<PostpartumRetryJobData>,
   );
 
@@ -124,6 +128,17 @@ describe('PostpartumService', () => {
     pregnancyProfilesService.findOne.mockResolvedValue(profile);
     prisma.postpartumLog.findFirst.mockResolvedValue(null);
     prisma.postpartumLog.create.mockResolvedValue(log);
+    prisma.postpartumLog.findMany.mockResolvedValue([
+      {
+        day_number: 3,
+        bleeding_level: BleedingLevel.NORMAL,
+        fever: false,
+        wound_condition: WoundCondition.BAIK,
+        headache_severe: false,
+        mood_flag: MoodFlag.BAIK,
+      },
+    ]);
+    prisma.user.findFirst.mockResolvedValue(null);
     remindersService.createPostpartumReminder.mockResolvedValue({
       id: 'reminder-id',
     });
@@ -151,15 +166,16 @@ describe('PostpartumService', () => {
     expect(aiServiceClient.evaluatePostpartum).toHaveBeenCalledWith(
       {
         pregnancy_profile_id: profileId,
-        postpartum_log: {
-          id: logId,
-          day_number: 3,
-          bleeding_level: BleedingLevel.NORMAL,
-          fever: false,
-          wound_condition: WoundCondition.BAIK,
-          headache_severe: false,
-          mood_flag: MoodFlag.BAIK,
-        },
+        logs: [
+          {
+            day_number: 3,
+            bleeding_level: BleedingLevel.NORMAL,
+            fever: false,
+            wound_condition: WoundCondition.BAIK,
+            headache_severe: false,
+            mood_flag: MoodFlag.BAIK,
+          },
+        ],
         had_preeclampsia_history: true,
       },
       requestId,

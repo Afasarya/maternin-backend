@@ -166,30 +166,62 @@ export class ConsultationsService {
       orderBy: { created_at: 'desc' },
     });
   }
-  async listDoctor(user: CurrentUserData) {
+  async listDoctor(
+    user: CurrentUserData,
+    query: {
+      status?: ConsultationStatus;
+      date_from?: string;
+      date_to?: string;
+      limit: number;
+      offset: number;
+    },
+  ) {
     const doctor = await this.doctors.findByUser(user.id);
-    return this.prisma.consultation.findMany({
-      where: { doctor_id: doctor.id },
-      include: {
-        pregnancy_profile: {
-          include: { user: { select: { full_name: true } } },
+    const where: Prisma.ConsultationWhereInput = {
+      doctor_id: doctor.id,
+      ...(query.status && { status: query.status }),
+      ...this.dateScope(query),
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.consultation.findMany({
+        where,
+        include: {
+          pregnancy_profile: {
+            select: { user: { select: { full_name: true } } },
+          },
+          payment: { select: { status: true, amount: true, paid_at: true } },
         },
-        payment: true,
-      },
-      orderBy: { scheduled_at: 'desc' },
-    });
+        orderBy: [{ scheduled_at: 'desc' }, { id: 'desc' }],
+        skip: query.offset,
+        take: query.limit,
+      }),
+      this.prisma.consultation.count({ where }),
+    ]);
+    return {
+      data: rows.map((row) => this.serializeConsultation(row)),
+      total,
+      limit: query.limit,
+      offset: query.offset,
+    };
   }
-  listAdmin() {
-    return this.prisma.consultation.findMany({
+  async listAdmin(query: { status?: ConsultationStatus; doctor_id?: string; payment_status?: string; date_from?: string; date_to?: string; search?: string; limit: number; offset: number }) {
+    const where: Prisma.ConsultationWhereInput = { ...(query.status && { status: query.status }), ...(query.doctor_id && { doctor_id: query.doctor_id }), ...(query.payment_status && { payment: { status: query.payment_status as never } }), ...this.dateScope(query), ...(query.search && { OR: [{ doctor: { user: { full_name: { contains: query.search, mode: 'insensitive' } } } }, { pregnancy_profile: { user: { full_name: { contains: query.search, mode: 'insensitive' } } } }] }) };
+    const [rows, total] = await this.prisma.$transaction([this.prisma.consultation.findMany({
+      where,
       include: {
         doctor: { include: { user: { select: { full_name: true } } } },
-        pregnancy_profile: {
-          include: { user: { select: { full_name: true } } },
-        },
+        pregnancy_profile: { select: { user: { select: { full_name: true } } } },
         payment: true,
       },
       orderBy: { created_at: 'desc' },
-    });
+      skip: query.offset, take: query.limit,
+    }), this.prisma.consultation.count({ where })]);
+    return { data: rows.map((row) => this.serializeConsultation(row)), total, limit: query.limit, offset: query.offset };
+  }
+  async adminDetail(id: string) {
+    const row = await this.prisma.consultation.findUnique({ where: { id }, include: { doctor: { include: { user: { select: { full_name: true } } } }, pregnancy_profile: { select: { user: { select: { full_name: true } } } }, payment: true } });
+    if (!row) throw new NotFoundException('Konsultasi tidak ditemukan');
+    return this.serializeConsultation(row);
   }
   async detail(id: string, user: CurrentUserData) {
     const c = await this.getAuthorized(id, user);
@@ -285,5 +317,30 @@ export class ConsultationsService {
     if (!allowed)
       throw new ForbiddenException('Tidak memiliki akses ke konsultasi');
     return c;
+  }
+  private dateScope(query: { date_from?: string; date_to?: string }): Prisma.ConsultationWhereInput {
+    return query.date_from || query.date_to ? { scheduled_at: { ...(query.date_from && { gte: new Date(query.date_from) }), ...(query.date_to && { lte: new Date(query.date_to) }) } } : {};
+  }
+
+  private serializeConsultation<T extends Record<string, unknown>>(row: T) {
+    const payment = row.payment as
+      | ({ amount?: { toString(): string } } & Record<string, unknown>)
+      | null
+      | undefined;
+    return {
+      ...row,
+      ...(row.price_snapshot !== undefined
+        ? { price_snapshot: String(row.price_snapshot) }
+        : {}),
+      ...(row.platform_fee !== undefined
+        ? { platform_fee: String(row.platform_fee) }
+        : {}),
+      ...(payment && {
+        payment: {
+          ...payment,
+          ...(payment.amount && { amount: payment.amount.toString() }),
+        },
+      }),
+    };
   }
 }

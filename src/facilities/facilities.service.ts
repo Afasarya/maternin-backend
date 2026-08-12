@@ -46,16 +46,21 @@ export class FacilitiesService {
   }
 
   async findAll(pagination: QueryPuskesmasDto) {
+    const where = pagination.search ? { OR: [
+      { name: { contains: pagination.search, mode: 'insensitive' as const } },
+      { wilayah_kerja: { contains: pagination.search, mode: 'insensitive' as const } },
+    ] } : {};
     const [data, total] = await this.prisma.$transaction([
       this.prisma.puskesmas.findMany({
         skip: pagination.offset,
         take: pagination.limit,
+        where,
         orderBy: { name: 'asc' },
       }),
-      this.prisma.puskesmas.count(),
+      this.prisma.puskesmas.count({ where }),
     ]);
 
-    return { data, total };
+    return { data, total, limit: pagination.limit, offset: pagination.offset };
   }
 
   async findOne(id: string) {

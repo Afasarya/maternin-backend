@@ -9,6 +9,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { RemindersService } from '../reminders/reminders.service.js';
 import { RiskAssessmentsCacheService } from './risk-assessments-cache.service.js';
 import { RiskAssessmentsService } from './risk-assessments.service.js';
+import { AiServiceClient } from '../common/services/ai-service.client.js';
+import { BidanConfirmAction } from './dto/bidan-confirm.dto.js';
 
 jest.mock('../prisma/prisma.service.js', () => ({
   PrismaService: class PrismaService {},
@@ -81,6 +83,7 @@ describe('RiskAssessmentsService', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    triageBidanAudit: { create: jest.fn() },
     $transaction: jest.fn(),
   };
   const pregnancyProfilesService = {
@@ -95,11 +98,13 @@ describe('RiskAssessmentsService', () => {
   const remindersService = {
     updateCadenceOnNewAssessment: jest.fn(),
   };
+  const aiServiceClient = { bidanConfirm: jest.fn(), predictTrend: jest.fn() };
   const service = new RiskAssessmentsService(
     prisma as unknown as PrismaService,
     pregnancyProfilesService as unknown as PregnancyProfilesService,
     cache as unknown as RiskAssessmentsCacheService,
     remindersService as unknown as RemindersService,
+    aiServiceClient as unknown as AiServiceClient,
   );
 
   beforeEach(() => {
@@ -129,6 +134,57 @@ describe('RiskAssessmentsService', () => {
           | ((transaction: typeof prisma) => Promise<unknown>),
       ) => (typeof input === 'function' ? input(prisma) : Promise.all(input)),
     );
+  });
+
+  it('confirms AI triage, clears review flag, and persists clinical audit', async () => {
+    const bidan = {
+      id: adminRequester.id,
+      role: UserRole.BIDAN,
+      puskesmas_id: puskesmasId,
+    };
+    prisma.riskAssessment.findUnique.mockResolvedValue(assessment);
+    prisma.riskAssessment.update.mockResolvedValue({
+      ...assessment,
+      risk_badge: RiskBadge.KUNING,
+      bidan_review_required: false,
+    });
+    prisma.triageBidanAudit.create.mockResolvedValue({
+      id: '77777777-7777-4777-8777-777777777777',
+    });
+    aiServiceClient.bidanConfirm.mockResolvedValue({
+      status: 'overridden',
+      new_badge: RiskBadge.KUNING,
+      audit_trail: 'logged',
+    });
+
+    await service.bidanConfirm(
+      assessmentId,
+      {
+        action: BidanConfirmAction.OVERRIDE_BADGE,
+        new_risk_badge: RiskBadge.KUNING,
+        rationale: 'Tekanan darah normal saat ukur ulang',
+      },
+      bidan,
+      'request-confirm',
+    );
+
+    expect(prisma.riskAssessment.update).toHaveBeenCalledWith({
+      where: { id: assessmentId },
+      data: { risk_badge: RiskBadge.KUNING, bidan_review_required: false },
+    });
+    expect(prisma.triageBidanAudit.create).toHaveBeenCalledWith({
+      // Jest asymmetric matcher is intentionally used for partial audit data.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      data: expect.objectContaining({
+        risk_assessment_id: assessmentId,
+        bidan_id: bidan.id,
+        action: BidanConfirmAction.OVERRIDE_BADGE,
+        previous_risk_badge: RiskBadge.MERAH,
+        new_risk_badge: RiskBadge.KUNING,
+        rationale: 'Tekanan darah normal saat ukur ulang',
+        request_id: 'request-confirm',
+      }),
+    });
   });
 
   describe('create', () => {

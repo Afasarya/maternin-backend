@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpStatus,
   Param,
   ParseUUIDPipe,
@@ -18,8 +19,10 @@ import { InternalAuthGuard } from '../common/guards/internal-auth.guard.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { CreateRiskAssessmentInternalDto } from './dto/create-risk-assessment-internal.dto.js';
+import { BidanConfirmDto } from './dto/bidan-confirm.dto.js';
 import { QueryLatestRiskAssessmentDto } from './dto/query-latest-risk-assessment.dto.js';
 import { QueryRiskAssessmentsDto } from './dto/query-risk-assessments.dto.js';
+import { PredictRiskTrendDto } from './dto/predict-risk-trend.dto.js';
 import { RiskAssessmentsService } from './risk-assessments.service.js';
 
 @Controller()
@@ -68,6 +71,21 @@ export class RiskAssessmentsController {
     );
   }
 
+  @Post('risk-assessments/trend-predict')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ibu_hamil', 'bidan', 'admin')
+  predictTrend(
+    @Body() dto: PredictRiskTrendDto,
+    @CurrentUser() requester: CurrentUserData,
+    @Headers('x-request-id') requestId: string,
+  ) {
+    return this.riskAssessmentsService.predictTrend(
+      dto.pregnancy_profile_id,
+      requester,
+      requestId,
+    );
+  }
+
   @Get('risk-assessments/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ibu_hamil', 'bidan', 'admin')
@@ -76,5 +94,22 @@ export class RiskAssessmentsController {
     @CurrentUser() requester: CurrentUserData,
   ) {
     return this.riskAssessmentsService.findOne(id, requester);
+  }
+
+  @Post('risk-assessments/:id/bidan-confirm')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('bidan')
+  bidanConfirm(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: BidanConfirmDto,
+    @CurrentUser() requester: CurrentUserData,
+    @Headers('x-request-id') requestId: string,
+  ) {
+    return this.riskAssessmentsService.bidanConfirm(
+      id,
+      dto,
+      requester,
+      requestId,
+    );
   }
 }

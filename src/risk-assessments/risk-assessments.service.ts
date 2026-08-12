@@ -3,14 +3,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { RiskAssessment } from '../../generated/prisma/client.js';
+import { Prisma, type RiskAssessment } from '../../generated/prisma/client.js';
 import { RiskBadge } from '../common/constants/index.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
-import type { TriageAnalysisResponse } from '../common/services/ai-service.client.js';
+import type { CompletedTriageAnalysisResponse } from '../common/services/ai-service.client.js';
+import { AiServiceClient } from '../common/services/ai-service.client.js';
 import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RemindersService } from '../reminders/reminders.service.js';
 import { CreateRiskAssessmentInternalDto } from './dto/create-risk-assessment-internal.dto.js';
+import {
+  BidanConfirmAction,
+  BidanConfirmDto,
+} from './dto/bidan-confirm.dto.js';
 import { RiskAssessmentsCacheService } from './risk-assessments-cache.service.js';
 
 interface Pagination {
@@ -28,6 +33,16 @@ interface AssessmentInput {
   risk_badge: RiskBadge;
   risk_factors: string[];
   recommendation_text: string;
+  contract_version?: string;
+  model_status?: string;
+  model_version?: string | null;
+  missing_features?: string[];
+  disclaimer?: string;
+  alert_delivery_status?: string;
+  anemia_is_mock?: boolean;
+  bidan_review_required?: boolean;
+  screening_not_diagnosis?: boolean;
+  evaluated_at?: string;
 }
 
 interface PrismaKnownRequestError {
@@ -58,7 +73,38 @@ export class RiskAssessmentsService {
     private readonly pregnancyProfilesService: PregnancyProfilesService,
     private readonly cache: RiskAssessmentsCacheService,
     private readonly remindersService: RemindersService,
+    private readonly aiServiceClient: AiServiceClient,
   ) {}
+
+  async predictTrend(
+    profileId: string,
+    requester: CurrentUserData,
+    requestId: string,
+  ) {
+    await this.pregnancyProfilesService.findOne(profileId, requester);
+    const assessments = await this.prisma.riskAssessment.findMany({
+      where: { pregnancy_profile_id: profileId },
+      orderBy: { created_at: 'asc' },
+      select: { aggregate_score: true, created_at: true },
+    });
+
+    if (assessments.length < 2) {
+      throw new BadRequestException(
+        'Prediksi tren membutuhkan minimal 2 risk assessment',
+      );
+    }
+
+    return this.aiServiceClient.predictTrend(
+      {
+        pregnancy_profile_id: profileId,
+        score_history: assessments.map((assessment) => ({
+          aggregate_score: Number(assessment.aggregate_score),
+          created_at: assessment.created_at.toISOString(),
+        })),
+      },
+      requestId,
+    );
+  }
 
   createFromCallback(
     dto: CreateRiskAssessmentInternalDto,
@@ -69,7 +115,7 @@ export class RiskAssessmentsService {
   async createFromAiResponse(
     pregnancyProfileId: string,
     symptomCheckinId: string,
-    aiResponse: TriageAnalysisResponse,
+    aiResponse: CompletedTriageAnalysisResponse,
     replaceExisting = false,
   ) {
     const result = await this.createAssessment(
@@ -85,6 +131,16 @@ export class RiskAssessmentsService {
         risk_badge: aiResponse.risk_badge,
         risk_factors: aiResponse.risk_factors,
         recommendation_text: aiResponse.recommendation_text,
+        contract_version: aiResponse.contract_version,
+        model_status: aiResponse.model_status,
+        model_version: aiResponse.model_version,
+        missing_features: aiResponse.missing_features,
+        disclaimer: aiResponse.disclaimer,
+        alert_delivery_status: aiResponse.alert_delivery_status,
+        anemia_is_mock: aiResponse.anemia_is_mock,
+        bidan_review_required: aiResponse.bidan_review_required,
+        screening_not_diagnosis: aiResponse.screening_not_diagnosis,
+        evaluated_at: aiResponse.evaluated_at,
       },
       replaceExisting,
     );
@@ -127,6 +183,58 @@ export class RiskAssessmentsService {
     );
 
     return assessment;
+  }
+
+  async bidanConfirm(
+    id: string,
+    dto: BidanConfirmDto,
+    requester: CurrentUserData,
+    requestId: string,
+  ) {
+    const assessment = await this.findOne(id, requester);
+    const aiResponse = await this.aiServiceClient.bidanConfirm(
+      id,
+      {
+        bidan_id: requester.id,
+        action: dto.action,
+        ...(dto.new_risk_badge && { new_risk_badge: dto.new_risk_badge }),
+        ...(dto.rationale && { rationale: dto.rationale }),
+      },
+      requestId,
+    );
+
+    return this.prisma.$transaction(async (transaction) => {
+      const updated =
+        dto.action === BidanConfirmAction.OVERRIDE_BADGE
+          ? await transaction.riskAssessment.update({
+              where: { id },
+              data: {
+                risk_badge: dto.new_risk_badge!,
+                bidan_review_required: false,
+              },
+            })
+          : await transaction.riskAssessment.update({
+              where: { id },
+              data: { bidan_review_required: false },
+            });
+      const audit = await transaction.triageBidanAudit.create({
+        data: {
+          risk_assessment_id: id,
+          bidan_id: requester.id,
+          action: dto.action,
+          previous_risk_badge: assessment.risk_badge,
+          new_risk_badge: dto.new_risk_badge,
+          rationale: dto.rationale,
+          ai_response: aiResponse as unknown as Prisma.InputJsonObject,
+          request_id: requestId,
+        },
+      });
+      return {
+        assessment: updated,
+        confirmation: aiResponse,
+        audit_id: audit.id,
+      };
+    });
   }
 
   async findLatest(profileId: string, requester: CurrentUserData) {
@@ -213,6 +321,18 @@ export class RiskAssessmentsService {
                     risk_badge: input.risk_badge,
                     risk_factors: input.risk_factors,
                     recommendation_text: input.recommendation_text,
+                    contract_version: input.contract_version,
+                    model_status: input.model_status,
+                    model_version: input.model_version,
+                    missing_features: input.missing_features,
+                    disclaimer: input.disclaimer,
+                    alert_delivery_status: input.alert_delivery_status,
+                    anemia_is_mock: input.anemia_is_mock,
+                    bidan_review_required: input.bidan_review_required,
+                    screening_not_diagnosis: input.screening_not_diagnosis,
+                    evaluated_at: input.evaluated_at
+                      ? new Date(input.evaluated_at)
+                      : undefined,
                     created_at: new Date(),
                   },
                 },
@@ -259,6 +379,18 @@ export class RiskAssessmentsService {
             risk_badge: input.risk_badge,
             risk_factors: input.risk_factors,
             recommendation_text: input.recommendation_text,
+            contract_version: input.contract_version,
+            model_status: input.model_status,
+            model_version: input.model_version,
+            missing_features: input.missing_features,
+            disclaimer: input.disclaimer,
+            alert_delivery_status: input.alert_delivery_status,
+            anemia_is_mock: input.anemia_is_mock,
+            bidan_review_required: input.bidan_review_required,
+            screening_not_diagnosis: input.screening_not_diagnosis,
+            evaluated_at: input.evaluated_at
+              ? new Date(input.evaluated_at)
+              : undefined,
           },
         });
 

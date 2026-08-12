@@ -37,8 +37,14 @@ coverage/
 # ==========================
 # Documentation (Local)
 # ==========================
-task/*
-!task/prd-backend.md
+# Semua task dan dokumen PRD bersifat lokal, jangan push.
+task/
+tasks/
+**/[Tt]ask/
+**/[Tt]asks/
+**/[Pp][Rr][Dd]/
+**/[Pp][Rr][Dd]-*/
+**/*[Pp][Rr][Dd]*
 postman/*
 !postman/07-symptom-checkins.postman_collection.json
 !postman/08-risk-assessments.postman_collection.json

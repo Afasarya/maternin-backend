@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { HttpModule } from '@nestjs/axios';
 import * as Joi from 'joi';
 import { AncRecordsModule } from './anc-records/anc-records.module.js';
+import { AdminModule } from './admin/admin.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -18,6 +19,7 @@ import { SupportSessionsModule } from './support-sessions/support-sessions.modul
 import { FacilitiesModule } from './facilities/facilities.module.js';
 import { FamilyCircleModule } from './family-circle/family-circle.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { NutritionModule } from './nutrition/nutrition.module.js';
 import { PostpartumModule } from './postpartum/postpartum.module.js';
 import { PregnancyProfilesModule } from './pregnancy-profiles/pregnancy-profiles.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -26,6 +28,7 @@ import { ReportsModule } from './reports/reports.module.js';
 import { RiskAssessmentsModule } from './risk-assessments/risk-assessments.module.js';
 import { SymptomCheckinsModule } from './symptom-checkins/symptom-checkins.module.js';
 import { SyncModule } from './sync/sync.module.js';
+import { UsersModule } from './users/users.module.js';
 
 @Module({
   imports: [
@@ -36,8 +39,14 @@ import { SyncModule } from './sync/sync.module.js';
         DATABASE_URL: Joi.string().required(),
         REDIS_URL: Joi.string().required(),
         JWT_SECRET: Joi.string().min(32).required(),
+        JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
+        REFRESH_TOKEN_TTL_DAYS: Joi.number().integer().min(1).max(90).default(30),
         INTERNAL_SERVICE_TOKEN: Joi.string().min(32).required(),
+        AI_INTERNAL_SERVICE_TOKEN: Joi.string().min(32).optional(),
         FONNTE_API_KEY: Joi.string().required(),
+        FONNTE_WEBHOOK_URL: Joi.string().uri().optional(),
+        FONNTE_WEBHOOK_TOKEN: Joi.string().min(16).required(),
+        NUTRITION_PROMPT_WINDOW_HOURS: Joi.number().integer().positive().default(6),
         AI_SERVICE_URL: Joi.string().uri().required(),
         NOMINATIM_BASE_URL: Joi.string()
           .uri()
@@ -77,6 +86,8 @@ import { SyncModule } from './sync/sync.module.js';
 
     // ─── Authentication & authorization foundation ───
     AuthModule,
+    AdminModule,
+    UsersModule,
 
     // ─── Puskesmas CRUD & nearby facilities proxy ───
     FacilitiesModule,
@@ -104,6 +115,8 @@ import { SyncModule } from './sync/sync.module.js';
 
     // ─── Queued Fonnte WhatsApp delivery & notification history ───
     NotificationsModule,
+
+    NutritionModule,
 
     // ─── Bidan patient monitoring dashboard ───
     BidanModule,

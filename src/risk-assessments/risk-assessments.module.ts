@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard.js';
+import { AiServiceModule } from '../common/services/ai-service.module.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { PregnancyProfilesModule } from '../pregnancy-profiles/pregnancy-profiles.module.js';
@@ -9,7 +10,7 @@ import { RiskAssessmentsController } from './risk-assessments.controller.js';
 import { RiskAssessmentsService } from './risk-assessments.service.js';
 
 @Module({
-  imports: [PregnancyProfilesModule, RemindersModule],
+  imports: [PregnancyProfilesModule, RemindersModule, AiServiceModule],
   controllers: [RiskAssessmentsController],
   providers: [
     RiskAssessmentsService,

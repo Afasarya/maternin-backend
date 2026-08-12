@@ -53,6 +53,8 @@ describe('SymptomCheckinsService', () => {
     id: profileId,
     user_id: patientId,
     had_preeclampsia_history: true,
+    hpht: new Date('2026-01-01T00:00:00.000Z'),
+    existing_conditions: [],
     user: { puskesmas_id: puskesmasId },
   };
   const checkin = {
@@ -71,10 +73,19 @@ describe('SymptomCheckinsService', () => {
     protein_urine: 'positif',
   };
   const aiResponse = {
+    contract_version: 'triage.v1',
+    status: 'completed' as const,
     risk_badge: RiskBadge.MERAH,
     aggregate_score: 84,
     risk_factors: ['Tekanan darah tinggi'],
     recommendation_text: 'Segera ke fasilitas kesehatan',
+    model_status: 'loaded' as const,
+    model_version: 'risk_aggregator_v1.pkl',
+    missing_features: [],
+    anemia_is_mock: false,
+    disclaimer: 'Skrining bukan diagnosis.',
+    screening_not_diagnosis: true as const,
+    evaluated_at: '2026-08-08T00:00:00.000Z',
   };
   const assessment = {
     id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -173,8 +184,18 @@ describe('SymptomCheckinsService', () => {
           symptom_checkin_id: checkinId,
           answers: checkin.answers,
           conjunctiva_image_url: null,
-          latest_anc: latestAnc,
+          latest_anc: {
+            ...latestAnc,
+            weight_kg: null,
+            fundal_height_cm: null,
+            platelet_count: null,
+          },
           has_preeclampsia_history: true,
+          age_years: null,
+          gestational_age_weeks: 29,
+          height_cm: null,
+          bmi: null,
+          existing_conditions: [],
         },
         requestId,
       );

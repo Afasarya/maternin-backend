@@ -28,9 +28,17 @@ export interface SendWhatsAppNotificationJobData {
 
 const TEMPLATES = {
   ancReminder: (name: string, date: string) =>
-    `Halo ${name}, waktunya pemeriksaan kehamilan rutin Anda. Jadwal berikutnya: ${date}. Jaga kesehatan Anda dan calon buah hati. 🤰`,
+    [
+      `Halo, Bu ${name}. Semoga Ibu dan si kecil sehat hari ini. 🌷`,
+      `Pengingat lembut: jadwal pemeriksaan kehamilan rutin berikutnya pada ${date}. Pemeriksaan rutin membantu memantau tumbuh kembang si kecil dan kondisi Ibu.`,
+      'Sempatkan istirahat, makan bergizi, dan siapkan Buku KIA sebelum berangkat ya, Bu. 💛',
+    ].join('\n\n'),
   postpartumReminder: (name: string, day: number) =>
-    `Halo ${name}, waktunya check-in nifas hari ke-${day}. Silakan isi laporan kondisi harian Anda di aplikasi MaternIn. 💛`,
+    [
+      `Halo, Bu ${name}. Bagaimana kondisi Ibu hari ini? 🌼`,
+      `Ini waktunya check-in masa nifas hari ke-${day}. Ceritakan kondisi perdarahan, luka, suhu tubuh, sakit kepala, dan suasana hati melalui aplikasi MaternIn.`,
+      'Merawat diri juga bagian penting dari merawat buah hati. Jangan ragu meminta bantuan keluarga atau tenaga kesehatan bila Ibu merasa tidak nyaman. 💛',
+    ].join('\n\n'),
   bidanAlert: (patientName: string, riskBadge: string) =>
     `[MaternIn] Pasien ${patientName} memiliki status risiko ${riskBadge}. Mohon segera ditindaklanjuti.`,
   familyUpdate: (patientName: string, riskBadge: string) =>

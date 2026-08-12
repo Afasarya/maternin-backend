@@ -15,5 +15,6 @@ import { ChatService } from './chat.service.js';
   ],
   controllers: [ChatController],
   providers: [ChatService, ChatRetryProcessor],
+  exports: [ChatService],
 })
 export class ChatModule {}

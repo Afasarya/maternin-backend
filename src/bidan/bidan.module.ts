@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { PregnancyProfilesModule } from '../pregnancy-profiles/pregnancy-profiles.module.js';
+import { AiServiceModule } from '../common/services/ai-service.module.js';
 import { BidanCacheService } from './bidan-cache.service.js';
 import { BidanController } from './bidan.controller.js';
 import { BidanService } from './bidan.service.js';
 
 @Module({
-  imports: [PregnancyProfilesModule],
+  imports: [PregnancyProfilesModule, AiServiceModule],
   controllers: [BidanController],
   providers: [BidanService, BidanCacheService],
   exports: [BidanService],

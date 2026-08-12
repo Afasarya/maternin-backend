@@ -13,7 +13,10 @@ import { AncRecordsService } from '../anc-records/anc-records.service.js';
 import { SymptomSource, UserRole } from '../common/constants/index.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { AiServiceUnavailableException } from '../common/exceptions/ai-service-unavailable.exception.js';
-import { AiServiceClient } from '../common/services/ai-service.client.js';
+import {
+  AiServiceClient,
+  isCompletedTriageResponse,
+} from '../common/services/ai-service.client.js';
 import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RiskAssessmentsService } from '../risk-assessments/risk-assessments.service.js';
@@ -180,6 +183,17 @@ export class SymptomCheckinsService {
       this.pregnancyProfilesService.findOne(checkin.pregnancy_profile_id),
       this.ancRecordsService.findLatest(checkin.pregnancy_profile_id),
     ]);
+    const bidan =
+      profile.user.puskesmas_id && this.prisma.user?.findFirst
+        ? await this.prisma.user.findFirst({
+            where: {
+              role: UserRole.BIDAN,
+              puskesmas_id: profile.user.puskesmas_id,
+            },
+            select: { phone_number: true },
+            orderBy: { created_at: 'asc' },
+          })
+        : null;
     const aiResponse = await this.aiServiceClient.analyzeTriageSymptoms(
       {
         pregnancy_profile_id: checkin.pregnancy_profile_id,
@@ -191,12 +205,46 @@ export class SymptomCheckinsService {
               systolic: latestAnc.systolic,
               diastolic: latestAnc.diastolic,
               protein_urine: latestAnc.protein_urine,
+              weight_kg: latestAnc.weight_kg
+                ? Number(latestAnc.weight_kg)
+                : null,
+              fundal_height_cm: latestAnc.fundal_height_cm
+                ? Number(latestAnc.fundal_height_cm)
+                : null,
+              platelet_count: latestAnc.platelet_count
+                ? Number(latestAnc.platelet_count)
+                : null,
             }
           : null,
         has_preeclampsia_history: profile.had_preeclampsia_history,
+        // Schema saat ini belum menyimpan tanggal lahir atau tinggi badan.
+        // Null mempertahankan provenance; AI Service wajib menandai fitur missing.
+        age_years: null,
+        gestational_age_weeks: this.gestationalAgeWeeks(
+          profile.hpht,
+          checkin.created_at,
+        ),
+        height_cm: null,
+        bmi: null,
+        existing_conditions: Array.isArray(profile.existing_conditions)
+          ? profile.existing_conditions.filter(
+              (condition): condition is string => typeof condition === 'string',
+            )
+          : null,
+        ...(bidan?.phone_number && {
+          bidan_phone: this.normalizeIndonesiaPhone(bidan.phone_number),
+        }),
       },
       requestId,
     );
+
+    if (!isCompletedTriageResponse(aiResponse)) {
+      throw new AiServiceUnavailableException(
+        'Model triage belum tersedia',
+        true,
+        'TRIAGE_MODEL_UNAVAILABLE',
+      );
+    }
 
     if (replaceExistingAssessment) {
       return this.riskAssessmentsService.createFromAiResponse(
@@ -212,6 +260,11 @@ export class SymptomCheckinsService {
       checkin.id,
       aiResponse,
     );
+  }
+
+  private normalizeIndonesiaPhone(phone: string) {
+    const digits = phone.replace(/\D/g, '');
+    return digits.startsWith('0') ? `62${digits.slice(1)}` : digits;
   }
 
   async findByProfile(
@@ -286,6 +339,10 @@ export class SymptomCheckinsService {
       };
     } catch (error: unknown) {
       if (!(error instanceof AiServiceUnavailableException)) {
+        throw error;
+      }
+
+      if (!error.retryable) {
         throw error;
       }
 
@@ -411,5 +468,19 @@ export class SymptomCheckinsService {
         'client_uuid sudah digunakan untuk profil kehamilan lain',
       );
     }
+  }
+
+  private gestationalAgeWeeks(hpht: Date | undefined, evaluatedAt: Date) {
+    if (!hpht) {
+      return null;
+    }
+
+    const elapsedMs = evaluatedAt.getTime() - hpht.getTime();
+
+    if (elapsedMs < 0) {
+      return null;
+    }
+
+    return Math.floor(elapsedMs / (7 * 24 * 60 * 60 * 1000));
   }
 }

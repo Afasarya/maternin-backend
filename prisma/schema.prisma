@@ -33,6 +33,12 @@ enum RiskBadge {
   merah
 }
 
+enum BidanTriageAction {
+  acknowledge
+  override_badge
+  dismiss
+}
+
 enum AncSource {
   self
   nakes
@@ -84,6 +90,22 @@ enum ReminderStatus {
   active
   paused
   done
+}
+
+enum NutritionActivityLogStatus {
+  processed
+  low_confidence
+  unmatched_sender
+  failed
+}
+
+enum NutritionMealPeriod {
+  breakfast
+  lunch
+  dinner
+  snack
+  mixed
+  unspecified
 }
 
 enum NotifyOn {
@@ -156,6 +178,7 @@ model User {
   phone_number  String   @unique
   email         String?
   password_hash String
+  is_active     Boolean  @default(true)
   puskesmas_id  String?  @db.Uuid
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
@@ -165,9 +188,30 @@ model User {
   anc_records        AncRecord[]        @relation("RecordedBy")
   doctor             Doctor?
   consultation_messages ConsultationMessage[]
+  triage_audits        TriageBidanAudit[]
+  refresh_sessions     RefreshSession[]
 
   @@index([puskesmas_id])
   @@map("users")
+}
+
+model RefreshSession {
+  id                 String    @id @default(uuid()) @db.Uuid
+  user_id            String    @db.Uuid
+  family_id          String    @db.Uuid
+  token_hash         String    @unique @db.VarChar(64)
+  expires_at         DateTime
+  revoked_at         DateTime?
+  replaced_by_id     String?   @unique @db.Uuid
+  created_at         DateTime  @default(now())
+
+  user        User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  replaced_by RefreshSession? @relation("RefreshRotation", fields: [replaced_by_id], references: [id])
+  replaces    RefreshSession? @relation("RefreshRotation")
+
+  @@index([user_id, family_id])
+  @@index([expires_at])
+  @@map("refresh_sessions")
 }
 
 model PregnancyProfile {
@@ -196,10 +240,74 @@ model PregnancyProfile {
   support_sessions SupportSession[]
   consultations    Consultation[]
   chat_messages    ChatMessage[]
+  nutrition_activity_logs NutritionActivityLog[]
+  nutrition_daily_logs NutritionDailyLog[]
+  nutrition_prompt_window NutritionPromptWindow?
 
   @@index([user_id])
   @@index([status])
   @@map("pregnancy_profiles")
+}
+
+model NutritionActivityLog {
+  id                     String                     @id @default(uuid()) @db.Uuid
+  provider_message_id    String?                    @unique @db.VarChar(64)
+  pregnancy_profile_id   String?                    @db.Uuid
+  nutrition_daily_log_id String?                    @db.Uuid
+  meal_period            NutritionMealPeriod        @default(unspecified)
+  raw_message            String
+  sender_phone           String                     @db.VarChar(32)
+  sender_matched         Boolean
+  parsed_calories        Decimal?                   @db.Decimal(6, 2)
+  parsed_iron_mg         Decimal?                   @db.Decimal(6, 2)
+  parsed_activity        String?
+  parsed_items           Json?                      @default("[]")
+  nutrition_per_item     Json?                      @default("[]")
+  insight_text           String?
+  confidence_score       Decimal?                   @db.Decimal(3, 2)
+  status                 NutritionActivityLogStatus
+  created_at             DateTime                   @default(now())
+
+  pregnancy_profile PregnancyProfile? @relation(fields: [pregnancy_profile_id], references: [id], onDelete: SetNull)
+  nutrition_daily_log NutritionDailyLog? @relation(fields: [nutrition_daily_log_id], references: [id], onDelete: SetNull)
+
+  @@index([pregnancy_profile_id, created_at])
+  @@index([nutrition_daily_log_id, created_at])
+  @@index([sender_phone, created_at])
+  @@map("nutrition_activity_logs")
+}
+
+model NutritionDailyLog {
+  id                   String   @id @default(uuid()) @db.Uuid
+  pregnancy_profile_id String   @db.Uuid
+  log_date             DateTime @db.Date
+  timezone             String   @default("Asia/Jakarta") @db.VarChar(64)
+  total_calories       Decimal  @default(0) @db.Decimal(8, 2)
+  total_iron_mg        Decimal  @default(0) @db.Decimal(8, 2)
+  total_protein_g      Decimal  @default(0) @db.Decimal(8, 2)
+  total_calcium_mg     Decimal  @default(0) @db.Decimal(10, 2)
+  entry_count          Int      @default(0)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id], onDelete: Cascade)
+  entries NutritionActivityLog[]
+
+  @@unique([pregnancy_profile_id, log_date])
+  @@index([pregnancy_profile_id, log_date])
+  @@map("nutrition_daily_logs")
+}
+
+model NutritionPromptWindow {
+  id                     String   @id @default(uuid()) @db.Uuid
+  pregnancy_profile_id   String   @unique @db.Uuid
+  last_prompt_sent_at    DateTime
+  window_closes_at       DateTime
+
+  pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id], onDelete: Cascade)
+
+  @@index([window_closes_at])
+  @@map("nutrition_prompt_windows")
 }
 
 model AncRecord {
@@ -251,14 +359,45 @@ model RiskAssessment {
   risk_badge               RiskBadge
   risk_factors             Json
   recommendation_text      String
+  contract_version         String?
+  model_status             String?
+  model_version            String?
+  missing_features         Json?     @default("[]")
+  disclaimer               String?
+  alert_delivery_status    String?
+  anemia_is_mock           Boolean   @default(false)
+  bidan_review_required    Boolean   @default(false)
+  screening_not_diagnosis  Boolean   @default(true)
+  evaluated_at             DateTime?
   created_at               DateTime  @default(now())
 
   pregnancy_profile PregnancyProfile @relation(fields: [pregnancy_profile_id], references: [id])
   symptom_checkin   SymptomCheckin?  @relation(fields: [symptom_checkin_id], references: [id])
+  bidan_audits      TriageBidanAudit[]
 
   @@index([pregnancy_profile_id, created_at])
   @@index([risk_badge])
   @@map("risk_assessments")
+}
+
+model TriageBidanAudit {
+  id                 String             @id @default(uuid()) @db.Uuid
+  risk_assessment_id String             @db.Uuid
+  bidan_id           String             @db.Uuid
+  action             BidanTriageAction
+  previous_risk_badge RiskBadge
+  new_risk_badge     RiskBadge?
+  rationale          String?
+  ai_response         Json
+  request_id          String?
+  created_at          DateTime           @default(now())
+
+  risk_assessment RiskAssessment @relation(fields: [risk_assessment_id], references: [id], onDelete: Restrict)
+  bidan           User           @relation(fields: [bidan_id], references: [id], onDelete: Restrict)
+
+  @@index([risk_assessment_id, created_at])
+  @@index([bidan_id, created_at])
+  @@map("triage_bidan_audits")
 }
 
 model PostpartumLog {
@@ -418,6 +557,7 @@ model Consultation {
 
   @@index([pregnancy_profile_id, created_at])
   @@index([doctor_id, scheduled_at])
+  @@index([status, created_at])
   @@map("consultations")
 }
 
@@ -432,6 +572,8 @@ model Payment {
   created_at          DateTime      @default(now())
 
   consultation Consultation @relation(fields: [consultation_id], references: [id])
+
+  @@index([status, created_at])
 
   @@map("payments")
 }

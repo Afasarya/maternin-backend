@@ -8,6 +8,7 @@ import { UserRole } from '../common/constants/index.js';
 import { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
+import { QueryAdminUsersDto } from './dto/query-admin-users.dto.js';
 
 const userProfileSelect = {
   id: true,
@@ -26,6 +27,13 @@ export class UsersService {
 
   findByPhone(phone_number: string) {
     return this.prisma.user.findUnique({ where: { phone_number } });
+  }
+
+  findAuthUser(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true, puskesmas_id: true, is_active: true },
+    });
   }
 
   async findById(id: string) {
@@ -70,5 +78,26 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async getAdminUsers(query: QueryAdminUsersDto) {
+    const where: Prisma.UserWhereInput = {
+      ...(query.role && { role: query.role }),
+      ...(query.puskesmas_id && { puskesmas_id: query.puskesmas_id }),
+      ...(query.search && {
+        OR: ['full_name', 'phone_number', 'email'].map((field) => ({
+          [field]: { contains: query.search, mode: 'insensitive' },
+        })),
+      }),
+    };
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where, skip: query.offset, take: query.limit,
+        orderBy: [{ [query.sort]: query.direction }, { id: 'asc' }],
+        select: { ...userProfileSelect, is_active: true, puskesmas: { select: { id: true, name: true } } },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { data, total, limit: query.limit, offset: query.offset };
   }
 }

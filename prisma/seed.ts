@@ -144,9 +144,25 @@ const userSeeds = [
     email: 'rani.puspitasari@maternin.example.test',
     puskesmas_id: puskesmasSeeds[0].id,
   },
+  {
+    id: 'd0000000-0000-4000-8000-000000000018',
+    role: UserRole.ibu_hamil,
+    full_name: 'Tester Nutrition WhatsApp',
+    phone_number: '+6281328282288',
+    email: 'nutrition.whatsapp@maternin.example.test',
+    puskesmas_id: puskesmasSeeds[0].id,
+  },
 ] as const;
 
 const pregnancyProfileSeeds = [
+  {
+    id: 'e0000000-0000-4000-8000-000000000018',
+    user_id: 'd0000000-0000-4000-8000-000000000018',
+    hpht: new Date('2026-04-01T00:00:00.000Z'),
+    hpl: new Date('2027-01-06T00:00:00.000Z'),
+    gravida: 1,
+    existing_conditions: [],
+  },
   {
     id: 'e0000000-0000-4000-8000-000000000001',
     user_id: 'd0000000-0000-4000-8000-000000000001',

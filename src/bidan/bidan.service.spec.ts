@@ -8,6 +8,7 @@ import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profil
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BidanCacheService } from './bidan-cache.service.js';
 import { BidanService, type BidanPatientItem } from './bidan.service.js';
+import { AiServiceClient } from '../common/services/ai-service.client.js';
 
 jest.mock('../prisma/prisma.service.js', () => ({
   PrismaService: class PrismaService {},
@@ -38,17 +39,27 @@ describe('BidanService', () => {
       findMany: jest.fn(),
       count: jest.fn(),
     },
-    ancRecord: { findFirst: jest.fn() },
-    riskAssessment: { findFirst: jest.fn() },
-    symptomCheckin: { findMany: jest.fn() },
-    postpartumLog: { findMany: jest.fn() },
+    ancRecord: { count: jest.fn(), findFirst: jest.fn(), findMany: jest.fn() },
+    riskAssessment: {
+      count: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    symptomCheckin: {
+      count: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    postpartumLog: { count: jest.fn(), findMany: jest.fn() },
   };
   const pregnancyProfilesService = { findOne: jest.fn() };
   const cache = { get: jest.fn(), set: jest.fn() };
+  const aiServiceClient = { generateVisitBrief: jest.fn() };
   const service = new BidanService(
     prisma as unknown as PrismaService,
     pregnancyProfilesService as unknown as PregnancyProfilesService,
     cache as unknown as BidanCacheService,
+    aiServiceClient as unknown as AiServiceClient,
   );
 
   const profile = (
@@ -205,7 +216,7 @@ describe('BidanService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('builds a deterministic local visit brief after profile access check', async () => {
+  it('generates an AI visit brief from recent clinical history after access check', async () => {
     const profileId = '40000000-0000-4000-8000-000000000001';
     pregnancyProfilesService.findOne.mockResolvedValue({
       id: profileId,
@@ -213,7 +224,7 @@ describe('BidanService', () => {
       ended_at: null,
       user: { full_name: 'Siti Rahmawati' },
     });
-    prisma.ancRecord.findFirst.mockResolvedValue({
+    const anc = {
       id: '50000000-0000-4000-8000-000000000001',
       systolic: 140,
       diastolic: 90,
@@ -222,35 +233,62 @@ describe('BidanService', () => {
       protein_urine: 'positif',
       platelet_count: null,
       recorded_at: new Date('2026-07-25T08:00:00.000Z'),
-    });
-    prisma.riskAssessment.findFirst.mockResolvedValue({
+    };
+    const risk = {
       risk_badge: RiskBadge.KUNING,
+      aggregate_score: { toString: () => '75.00' },
       risk_factors: ['Tekanan darah tinggi'],
       recommendation_text: 'Kontrol ke bidan.',
-    });
+    };
+    prisma.ancRecord.findMany.mockResolvedValue([anc]);
+    prisma.riskAssessment.findMany.mockResolvedValue([risk]);
     prisma.symptomCheckin.findMany.mockResolvedValue([
-      { answers: { sakit_kepala: 'berat', pandangan_kabur: false } },
+      {
+        answers: { sakit_kepala: 'ringan' },
+        created_at: new Date('2026-07-24T08:00:00.000Z'),
+      },
     ]);
     prisma.postpartumLog.findMany.mockResolvedValue([]);
+    aiServiceClient.generateVisitBrief.mockResolvedValue({
+      brief_text: 'Ringkasan klinis kunjungan.',
+    });
 
-    const result = await service.getVisitBrief(profileId, bidan);
+    const result = await service.getVisitBrief(
+      profileId,
+      bidan,
+      'visit-request',
+    );
 
     expect(pregnancyProfilesService.findOne).toHaveBeenCalledWith(
       profileId,
       bidan,
     );
-    expect(result).toEqual(
-      expect.objectContaining({
-        patient_name: 'Siti Rahmawati',
-        latest_risk_badge: RiskBadge.KUNING,
-        vitals_summary:
-          'TD 140/90 mmHg, BB 65.50 kg, TFU 28.00 cm, Protein urine positif',
-        risk_factors: ['Tekanan darah tinggi'],
-        recent_symptoms: ['sakit_kepala: berat', 'pandangan_kabur: false'],
-        recommendation: 'Kontrol ke bidan.',
-        last_visit_date: '2026-07-25',
-      }),
+    expect(aiServiceClient.generateVisitBrief).toHaveBeenCalledWith(
+      {
+        pregnancy_profile_id: profileId,
+        anc_history: [anc],
+        risk_assessments: [risk],
+        postpartum_logs: [],
+      },
+      'visit-request',
     );
+    expect(result).toEqual({
+      patient_name: 'Siti Rahmawati',
+      gestational_week: expect.any(Number),
+      latest_risk_badge: RiskBadge.KUNING,
+      latest_aggregate_score: '75.00',
+      vitals_summary: {
+        systolic: 140,
+        diastolic: 90,
+        weight_kg: '65.50',
+        fundal_height_cm: '28.00',
+        platelet_count: null,
+      },
+      risk_factors: ['Tekanan darah tinggi'],
+      recent_symptoms: ['sakit_kepala: ringan'],
+      recommendation: 'Ringkasan klinis kunjungan.',
+      last_visit_date: '2026-07-25',
+    });
   });
 
   it('counts latest patient badges, nifas, and unique overdue profiles', async () => {
@@ -282,12 +320,16 @@ describe('BidanService', () => {
     prisma.pregnancyProfile.count
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(2);
+    prisma.ancRecord.count.mockResolvedValue(4);
+    prisma.riskAssessment.findMany.mockResolvedValue([]);
 
     await expect(service.getStatistics(bidan)).resolves.toEqual({
       total_patients: 2,
       risk_distribution: { merah: 1, kuning: 0, hijau: 0 },
       overdue_checkins: 2,
       nifas_count: 1,
+      anc_this_month: 4,
+      latest_alerts: [],
     });
     expect(prisma.pregnancyProfile.count).toHaveBeenNthCalledWith(1, {
       where: {

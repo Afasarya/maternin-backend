@@ -1,0 +1,2 @@
+ALTER TABLE "nutrition_activity_logs" ADD COLUMN "provider_message_id" VARCHAR(64);
+CREATE UNIQUE INDEX "nutrition_activity_logs_provider_message_id_key" ON "nutrition_activity_logs"("provider_message_id");

@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UserRole } from '../../common/constants/index.js';
+import { UsersService } from '../../users/users.service.js';
+import { UnauthorizedException } from '@nestjs/common';
 
 interface JwtPayload {
   sub: string;
@@ -12,7 +14,7 @@ interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService) {
+  constructor(configService: ConfigService, private readonly users: UsersService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -20,11 +22,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: JwtPayload) {
+  async validate(payload: JwtPayload) {
+    const user = await this.users.findAuthUser(payload.sub);
+    if (!user?.is_active) throw new UnauthorizedException('User tidak aktif');
     return {
-      id: payload.sub,
-      role: payload.role,
-      puskesmas_id: payload.puskesmas_id,
+      id: user.id,
+      role: user.role,
+      puskesmas_id: user.puskesmas_id,
     };
   }
 }

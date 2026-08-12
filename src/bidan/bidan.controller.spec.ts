@@ -26,7 +26,14 @@ describe('BidanController', () => {
     patient_name: 'Siti Rahmawati',
     gestational_week: 29,
     latest_risk_badge: RiskBadge.KUNING,
-    vitals_summary: 'TD 130/85 mmHg',
+    latest_aggregate_score: '60.00',
+    vitals_summary: {
+      systolic: 130,
+      diastolic: 85,
+      weight_kg: '62.50',
+      fundal_height_cm: null,
+      platelet_count: null,
+    },
     risk_factors: ['Tekanan darah tinggi'],
     recent_symptoms: ['sakit_kepala: ringan'],
     recommendation: 'Kontrol terjadwal.',
@@ -37,11 +44,15 @@ describe('BidanController', () => {
     risk_distribution: { merah: 1, kuning: 1, hijau: 1 },
     overdue_checkins: 1,
     nifas_count: 1,
+    anc_this_month: 2,
+    latest_alerts: [],
   };
   const bidanService = {
     getPatients: jest.fn(),
     getVisitBrief: jest.fn(),
     getStatistics: jest.fn(),
+    getPatientDetail: jest.fn(),
+    getAlerts: jest.fn(),
   };
   let authenticatedUser: CurrentUserData = requester;
   let app: INestApplication<App>;
@@ -137,6 +148,7 @@ describe('BidanController', () => {
     expect(bidanService.getVisitBrief).toHaveBeenCalledWith(
       profileId,
       requester,
+      undefined,
     );
 
     await request(app.getHttpServer())
@@ -195,6 +207,7 @@ describe('BidanController', () => {
     expect(bidanService.getVisitBrief).toHaveBeenCalledWith(
       profileId,
       authenticatedUser,
+      undefined,
     );
   });
 

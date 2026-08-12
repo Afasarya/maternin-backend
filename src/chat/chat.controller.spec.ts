@@ -5,6 +5,7 @@ import type { App } from 'supertest/types';
 import { UserRole } from '../common/constants/index.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { ChatController } from './chat.controller.js';
 import { ChatService } from './chat.service.js';
 
@@ -39,6 +40,8 @@ describe('ChatController', () => {
       })
       .overrideGuard(RolesGuard)
       .useValue({ canActivate: () => true })
+      .overrideGuard(ThrottlerGuard)
+      .useValue({ canActivate: () => true })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -52,7 +55,7 @@ describe('ChatController', () => {
     await app.init();
   });
 
-  afterAll(() => app.close());
+  afterAll(() => app?.close());
 
   beforeEach(() => {
     jest.clearAllMocks();

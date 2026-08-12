@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -25,6 +26,8 @@ export class ChatController {
 
   @Post()
   @Roles('ibu_hamil')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   sendMessage(
     @Body() dto: SendChatDto,
     @CurrentUser() requester: CurrentUserData,

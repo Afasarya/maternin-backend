@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Headers,
+  HttpCode,
+  HttpStatus,
   Post,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -18,7 +20,9 @@ export class PaymentsController {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {}
-  @Post() async webhook(
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  async webhook(
     @Headers('x-callback-token') token: string | undefined,
     @Body() payload: Record<string, unknown>,
   ) {

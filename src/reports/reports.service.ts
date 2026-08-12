@@ -220,6 +220,25 @@ export class ReportsService {
     };
   }
 
+  async exportMonthlyCsv(requester: CurrentUserData, query: ReportQueryDto) {
+    const report = await this.generateMonthlyReport(requester, query);
+    const rows: unknown[][] = [
+      ['metric', 'value'],
+      ['puskesmas', report.report_period.puskesmas_name],
+      ...Object.entries(report.summary),
+      ['risk_merah', report.risk_distribution.merah.count],
+      ['risk_kuning', report.risk_distribution.kuning.count],
+      ['risk_hijau', report.risk_distribution.hijau.count],
+    ];
+    return '\uFEFF' + rows.map((row) => row.map((value) => this.csvCell(value)).join(',')).join('\r\n');
+  }
+
+  private csvCell(value: unknown) {
+    let text = String(value ?? '');
+    if (/^[=+\-@]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
   private async resolveScope(
     requester: CurrentUserData,
     requestedPuskesmasId?: string,

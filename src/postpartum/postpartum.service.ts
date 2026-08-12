@@ -19,6 +19,8 @@ import {
 import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profiles.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RemindersService } from '../reminders/reminders.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationChannel } from '../common/constants/index.js';
 import { CreatePostpartumLogDto } from './dto/create-postpartum-log.dto.js';
 import { PostpartumFlagCallbackDto } from './dto/postpartum-flag-callback.dto.js';
 import { PostpartumLogSort } from './dto/query-postpartum-logs.dto.js';
@@ -66,6 +68,7 @@ export class PostpartumService {
     private readonly aiServiceClient: AiServiceClient,
     private readonly pregnancyProfilesService: PregnancyProfilesService,
     private readonly remindersService: RemindersService,
+    private readonly notificationsService: NotificationsService,
     @InjectQueue(POSTPARTUM_RETRY_QUEUE)
     private readonly postpartumRetryQueue: Queue<PostpartumRetryJobData>,
   ) {}
@@ -177,19 +180,36 @@ export class PostpartumService {
     const profile = await this.pregnancyProfilesService.findOne(
       log.pregnancy_profile_id,
     );
+    const logs = await this.prisma.postpartumLog.findMany({
+      where: { pregnancy_profile_id: log.pregnancy_profile_id },
+      orderBy: [{ day_number: 'asc' }, { created_at: 'asc' }],
+      select: {
+        day_number: true,
+        bleeding_level: true,
+        fever: true,
+        wound_condition: true,
+        headache_severe: true,
+        mood_flag: true,
+      },
+    });
+    const bidan =
+      profile.user.puskesmas_id && this.prisma.user?.findFirst
+        ? await this.prisma.user.findFirst({
+            where: {
+              role: UserRole.BIDAN,
+              puskesmas_id: profile.user.puskesmas_id,
+            },
+            select: { phone_number: true },
+          })
+        : null;
     const evaluation = await this.aiServiceClient.evaluatePostpartum(
       {
         pregnancy_profile_id: log.pregnancy_profile_id,
-        postpartum_log: {
-          id: log.id,
-          day_number: log.day_number,
-          bleeding_level: log.bleeding_level,
-          fever: log.fever,
-          wound_condition: log.wound_condition,
-          headache_severe: log.headache_severe,
-          mood_flag: log.mood_flag,
-        },
+        logs,
         had_preeclampsia_history: profile.had_preeclampsia_history,
+        ...(bidan?.phone_number && {
+          bidan_phone: this.normalizeIndonesiaPhone(bidan.phone_number),
+        }),
       },
       requestId,
     );
@@ -204,11 +224,31 @@ export class PostpartumService {
       },
     });
 
+    if (
+      (evaluation.red_flag_triggered || evaluation.mental_health_flag) &&
+      bidan &&
+      this.notificationsService
+    ) {
+      await this.notificationsService.sendNotification(
+        NotificationChannel.WA_BIDAN,
+        log.pregnancy_profile_id,
+        bidan.phone_number,
+        `[MaternIn] Skrining nifas memerlukan tindak lanjut bidan: ${evaluation.reason}`,
+      );
+    }
+
     return evaluation;
   }
 
   async updateFlags(dto: PostpartumFlagCallbackDto) {
-    const log = await this.findLogOrThrow(dto.postpartum_log_id);
+    const log = dto.postpartum_log_id
+      ? await this.findLogOrThrow(dto.postpartum_log_id)
+      : await this.prisma.postpartumLog.findFirst({
+          where: { pregnancy_profile_id: dto.pregnancy_profile_id },
+          orderBy: { created_at: 'desc' },
+        });
+
+    if (!log) throw new NotFoundException('Postpartum log tidak ditemukan');
 
     if (log.pregnancy_profile_id !== dto.pregnancy_profile_id) {
       throw new BadRequestException(
@@ -227,6 +267,11 @@ export class PostpartumService {
         evaluated_at: new Date(),
       },
     });
+  }
+
+  private normalizeIndonesiaPhone(phone: string) {
+    const digits = phone.replace(/\D/g, '');
+    return digits.startsWith('0') ? `62${digits.slice(1)}` : digits;
   }
 
   async findByProfile(

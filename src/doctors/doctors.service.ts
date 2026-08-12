@@ -90,7 +90,30 @@ export class DoctorsService {
   }
   async update(id: string, dto: Prisma.DoctorUpdateInput) {
     await this.findDoctor(id);
-    return this.prisma.doctor.update({ where: { id }, data: dto });
+    const { full_name, phone_number, email, ...doctorData } = dto as Prisma.DoctorUpdateInput & { full_name?: string; phone_number?: string; email?: string };
+    return this.prisma.$transaction(async (tx) => {
+      const doctor = await tx.doctor.update({ where: { id }, data: doctorData });
+      if (full_name !== undefined || phone_number !== undefined || email !== undefined) {
+        await tx.user.update({ where: { id: doctor.user_id }, data: { full_name, phone_number, email } });
+      }
+      return tx.doctor.findUnique({ where: { id }, include: { user: { select: { id: true, full_name: true, phone_number: true, email: true } } } });
+    });
+  }
+  async findAllAdmin(query: { search?: string; specialization?: string; is_active?: boolean; limit: number; offset: number; sort: string; direction: 'asc' | 'desc' }) {
+    const where: Prisma.DoctorWhereInput = {
+      ...(query.is_active !== undefined && { is_active: query.is_active }),
+      ...(query.specialization && { specialization: { contains: query.specialization, mode: 'insensitive' } }),
+      ...(query.search && { OR: [
+        { specialization: { contains: query.search, mode: 'insensitive' } },
+        { user: { full_name: { contains: query.search, mode: 'insensitive' } } },
+      ] }),
+    };
+    const orderBy = query.sort === 'full_name' ? { user: { full_name: query.direction } } : { [query.sort]: query.direction };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.doctor.findMany({ where, skip: query.offset, take: query.limit, orderBy: [orderBy, { id: 'asc' }], include: { user: { select: { full_name: true, phone_number: true, email: true } }, _count: { select: { schedules: true } } } }),
+      this.prisma.doctor.count({ where }),
+    ]);
+    return { data: rows.map(({ user, _count, ...row }) => ({ ...row, ...user, price: row.price.toString(), schedule_count: _count.schedules })), total, limit: query.limit, offset: query.offset };
   }
   async findByUser(userId: string) {
     const doctor = await this.prisma.doctor.findUnique({

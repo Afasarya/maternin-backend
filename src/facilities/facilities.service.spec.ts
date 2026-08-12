@@ -44,10 +44,13 @@ describe('FacilitiesService', () => {
     await expect(service.findAll({ limit: 20, offset: 0 })).resolves.toEqual({
       data: [],
       total: 2,
+      limit: 20,
+      offset: 0,
     });
     expect(prisma.puskesmas.findMany).toHaveBeenCalledWith({
       skip: 0,
       take: 20,
+      where: {},
       orderBy: { name: 'asc' },
     });
   });

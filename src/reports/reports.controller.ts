@@ -1,4 +1,5 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -19,5 +20,15 @@ export class ReportsController {
     @Query() query: ReportQueryDto,
   ) {
     return this.reportsService.generateMonthlyReport(requester, query);
+  }
+
+  @Get('monthly/export')
+  async exportMonthly(@CurrentUser() requester: CurrentUserData, @Query() query: ReportQueryDto, @Res() response: Response) {
+    const csv = await this.reportsService.exportMonthlyCsv(requester, query);
+    const month = query.month ?? new Date().getUTCMonth() + 1;
+    const year = query.year ?? new Date().getUTCFullYear();
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader('Content-Disposition', `attachment; filename="maternin-report-${year}-${String(month).padStart(2, '0')}.csv"`);
+    response.send(csv);
   }
 }

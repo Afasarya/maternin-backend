@@ -82,6 +82,23 @@ export class ChatService {
     }
   }
 
+  async sendTrustedWebhookMessage(
+    pregnancyProfileId: string,
+    message: string,
+    requestId: string,
+  ) {
+    const userMessage = await this.prisma.chatMessage.create({
+      data: { pregnancy_profile_id: pregnancyProfileId, sender_type: 'user', message },
+    });
+    try {
+      return await this.processReply(userMessage.id, requestId);
+    } catch (error: unknown) {
+      if (!(error instanceof AiServiceUnavailableException)) throw error;
+      await this.enqueueReplyRetry(userMessage.id, requestId);
+      return { status: 'processing' as const, message: 'Sedang diproses' };
+    }
+  }
+
   async processReply(
     userMessageId: string,
     requestId: string,

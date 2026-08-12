@@ -54,6 +54,9 @@ export class DoctorSchedulesController {
   ) {
     if (dto.schedules.some((x) => x.start_time >= x.end_time))
       throw new BadRequestException('start_time harus sebelum end_time');
+    const sorted = [...dto.schedules].sort((a, b) => a.day_of_week.localeCompare(b.day_of_week) || a.start_time.localeCompare(b.start_time));
+    const conflict = sorted.find((item, index) => index > 0 && sorted[index - 1].day_of_week === item.day_of_week && item.start_time < sorted[index - 1].end_time);
+    if (conflict) throw new BadRequestException(`Jadwal overlap pada ${conflict.day_of_week}: ${conflict.start_time}-${conflict.end_time}`);
     const doctor = await this.doctors.findByUser(user.id);
     return this.prisma.$transaction(async (tx) => {
       await tx.doctorSchedule.deleteMany({ where: { doctor_id: doctor.id } });

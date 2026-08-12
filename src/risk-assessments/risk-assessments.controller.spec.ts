@@ -22,6 +22,11 @@ describe('RiskAssessmentsController internal callback', () => {
     risk_badge: RiskBadge.MERAH,
     risk_factors: ['Tekanan darah tinggi'],
     recommendation_text: 'Segera ke fasilitas kesehatan',
+    alert_delivery_status: 'sent',
+    anemia_is_mock: false,
+    bidan_review_required: true,
+    disclaimer: 'Hasil ini adalah skrining otomatis, bukan diagnosis.',
+    screening_not_diagnosis: true,
   };
   const assessment = {
     id: '22222222-2222-4222-8222-222222222222',

@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AiServiceModule } from '../common/services/ai-service.module.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 import { PregnancyProfilesModule } from '../pregnancy-profiles/pregnancy-profiles.module.js';
 import { RemindersModule } from '../reminders/reminders.module.js';
 import { POSTPARTUM_RETRY_QUEUE } from './postpartum.constants.js';
@@ -14,6 +15,7 @@ import { PostpartumService } from './postpartum.service.js';
     PregnancyProfilesModule,
     RemindersModule,
     AiServiceModule,
+    NotificationsModule,
   ],
   controllers: [PostpartumController],
   providers: [PostpartumService, PostpartumRetryProcessor],

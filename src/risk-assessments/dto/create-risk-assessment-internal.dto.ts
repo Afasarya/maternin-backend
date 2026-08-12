@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsNumber,
@@ -56,4 +57,20 @@ export class CreateRiskAssessmentInternalDto {
   @IsString()
   @IsNotEmpty()
   recommendation_text!: string;
+
+  @IsString()
+  alert_delivery_status!: string;
+
+  @IsBoolean()
+  anemia_is_mock!: boolean;
+
+  @IsBoolean()
+  bidan_review_required!: boolean;
+
+  @IsString()
+  @IsNotEmpty()
+  disclaimer!: string;
+
+  @IsBoolean()
+  screening_not_diagnosis!: boolean;
 }

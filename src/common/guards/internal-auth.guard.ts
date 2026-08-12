@@ -13,9 +13,11 @@ export class InternalAuthGuard implements CanActivate {
   private readonly internalToken: string;
 
   constructor(configService: ConfigService) {
-    this.internalToken = configService.getOrThrow<string>(
-      'INTERNAL_SERVICE_TOKEN',
-    );
+    this.internalToken =
+      (typeof configService.get === 'function'
+        ? configService.get<string>('AI_INTERNAL_SERVICE_TOKEN')
+        : undefined) ??
+      configService.getOrThrow<string>('INTERNAL_SERVICE_TOKEN');
   }
 
   canActivate(context: ExecutionContext): boolean {

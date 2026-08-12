@@ -11,6 +11,7 @@ import { PregnancyProfilesService } from '../pregnancy-profiles/pregnancy-profil
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BidanCacheService } from './bidan-cache.service.js';
 import { QueryPatientsDto } from './dto/query-patients.dto.js';
+import { AiServiceClient } from '../common/services/ai-service.client.js';
 
 const patientSnapshotInclude = {
   user: {
@@ -52,6 +53,24 @@ export interface BidanPatientItem {
   risk_factors: string[];
 }
 
+export interface VisitBriefDto {
+  patient_name: string;
+  gestational_week: number;
+  latest_risk_badge: RiskBadge | null;
+  latest_aggregate_score: string | null;
+  vitals_summary: {
+    systolic: number;
+    diastolic: number;
+    weight_kg: string;
+    fundal_height_cm: string | null;
+    platelet_count: number | null;
+  } | null;
+  risk_factors: string[];
+  recent_symptoms: string[];
+  recommendation: string;
+  last_visit_date: string | null;
+}
+
 @Injectable()
 export class BidanService {
   private static readonly PATIENTS_CACHE_TTL_SECONDS = 5 * 60;
@@ -61,10 +80,26 @@ export class BidanService {
     private readonly prisma: PrismaService,
     private readonly pregnancyProfilesService: PregnancyProfilesService,
     private readonly cache: BidanCacheService,
+    private readonly aiServiceClient: AiServiceClient,
   ) {}
 
   async getPatients(requester: CurrentUserData, query: QueryPatientsDto) {
-    const snapshot = await this.getPatientSnapshot(requester);
+    if (
+      requester.role === UserRole.BIDAN &&
+      query.puskesmas_id &&
+      query.puskesmas_id !== requester.puskesmas_id
+    ) {
+      throw new ForbiddenException('Bidan hanya dapat mengakses wilayahnya');
+    }
+    const scopedRequester =
+      requester.role === UserRole.ADMIN && query.puskesmas_id
+        ? {
+            ...requester,
+            role: UserRole.BIDAN,
+            puskesmas_id: query.puskesmas_id,
+          }
+        : requester;
+    const snapshot = await this.getPatientSnapshot(scopedRequester);
     const normalizedSearch = query.search?.toLocaleLowerCase('id-ID');
     const filtered = snapshot.filter((patient) => {
       const matchesRisk =
@@ -86,41 +121,50 @@ export class BidanService {
     };
   }
 
-  async getVisitBrief(profileId: string, requester: CurrentUserData) {
+  async getVisitBrief(
+    profileId: string,
+    requester: CurrentUserData,
+    requestId = '',
+  ) {
     const profile = await this.pregnancyProfilesService.findOne(
       profileId,
       requester,
     );
-    const [latestAnc, latestRisk, recentCheckins, recentPostpartumLogs] =
+    const [ancHistory, riskAssessments, symptomCheckins, postpartumLogs] =
       await Promise.all([
-        this.prisma.ancRecord.findFirst({
-          where: { pregnancy_profile_id: profileId },
-          orderBy: [{ recorded_at: 'desc' }, { id: 'desc' }],
-        }),
-        this.prisma.riskAssessment.findFirst({
-          where: { pregnancy_profile_id: profileId },
-          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-        }),
-        this.prisma.symptomCheckin.findMany({
-          where: { pregnancy_profile_id: profileId },
-          select: { answers: true },
-          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-          take: BidanService.RECENT_RECORD_LIMIT,
-        }),
-        this.prisma.postpartumLog.findMany({
-          where: { pregnancy_profile_id: profileId },
-          select: {
-            day_number: true,
-            bleeding_level: true,
-            fever: true,
-            wound_condition: true,
-            headache_severe: true,
-            mood_flag: true,
-          },
-          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-          take: BidanService.RECENT_RECORD_LIMIT,
-        }),
+      this.prisma.ancRecord.findMany({
+        where: { pregnancy_profile_id: profileId },
+        orderBy: [{ recorded_at: 'desc' }, { id: 'desc' }],
+        take: BidanService.RECENT_RECORD_LIMIT,
+      }),
+      this.prisma.riskAssessment.findMany({
+        where: { pregnancy_profile_id: profileId },
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        take: BidanService.RECENT_RECORD_LIMIT,
+      }),
+      this.prisma.symptomCheckin.findMany({
+        where: { pregnancy_profile_id: profileId },
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        take: BidanService.RECENT_RECORD_LIMIT,
+        select: { answers: true, created_at: true },
+      }),
+      this.prisma.postpartumLog.findMany({
+        where: { pregnancy_profile_id: profileId },
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        take: BidanService.RECENT_RECORD_LIMIT,
+      }),
       ]);
+    const aiBrief = await this.aiServiceClient.generateVisitBrief(
+      {
+        pregnancy_profile_id: profileId,
+        anc_history: ancHistory,
+        risk_assessments: riskAssessments,
+        postpartum_logs: postpartumLogs,
+      },
+      requestId,
+    );
+    const latestAnc = ancHistory[0] ?? null;
+    const latestRisk = riskAssessments[0] ?? null;
 
     return {
       patient_name: profile.user.full_name,
@@ -131,22 +175,69 @@ export class BidanService {
       latest_risk_badge: latestRisk
         ? (latestRisk.risk_badge as RiskBadge)
         : null,
+      latest_aggregate_score: latestRisk
+        ? latestRisk.aggregate_score.toString()
+        : null,
       vitals_summary: this.buildVitalsSummary(latestAnc),
       risk_factors: this.toStringArray(latestRisk?.risk_factors),
       recent_symptoms: this.buildRecentSymptoms(
-        recentCheckins,
-        recentPostpartumLogs,
+        symptomCheckins,
+        postpartumLogs,
       ),
-      recommendation: latestRisk?.recommendation_text ?? null,
+      recommendation: aiBrief.brief_text,
       last_visit_date: latestAnc
         ? this.toDateOnly(latestAnc.recorded_at)
         : null,
+    } satisfies VisitBriefDto;
+  }
+
+  async getPatientDetail(profileId: string, requester: CurrentUserData) {
+    const profile = await this.pregnancyProfilesService.findOne(
+      profileId,
+      requester,
+    );
+    const [latestAnc, latestRisk, latestSymptom, counts] = await Promise.all([
+      this.prisma.ancRecord.findFirst({
+        where: { pregnancy_profile_id: profileId },
+        orderBy: [{ recorded_at: 'desc' }, { id: 'desc' }],
+      }),
+      this.prisma.riskAssessment.findFirst({
+        where: { pregnancy_profile_id: profileId },
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      }),
+      this.prisma.symptomCheckin.findFirst({
+        where: { pregnancy_profile_id: profileId },
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      }),
+      Promise.all([
+        this.prisma.ancRecord.count({ where: { pregnancy_profile_id: profileId } }),
+        this.prisma.symptomCheckin.count({ where: { pregnancy_profile_id: profileId } }),
+        this.prisma.riskAssessment.count({ where: { pregnancy_profile_id: profileId } }),
+        this.prisma.postpartumLog.count({ where: { pregnancy_profile_id: profileId } }),
+      ]),
+    ]);
+
+    return {
+      profile,
+      latest_anc: this.serializeDecimals(latestAnc),
+      latest_risk_assessment: this.serializeDecimals(latestRisk),
+      latest_symptom_checkin: latestSymptom,
+      counts: {
+        anc: counts[0],
+        symptom: counts[1],
+        risk: counts[2],
+        postpartum: counts[3],
+      },
     };
   }
 
   async getStatistics(requester: CurrentUserData) {
     const scope = this.buildProfileScope(requester);
-    const [patients, nifasCount, overdueCheckins] = await Promise.all([
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const [patients, nifasCount, overdueCheckins, ancThisMonth, latestAlerts] =
+      await Promise.all([
       this.getPatientSnapshot(requester),
       this.prisma.pregnancyProfile.count({
         where: { ...scope, status: PregnancyStatus.NIFAS },
@@ -162,6 +253,26 @@ export class BidanService {
               status: ReminderStatus.ACTIVE,
               next_trigger_at: { lte: new Date() },
             },
+          },
+        },
+      }),
+      this.prisma.ancRecord.count({
+        where: {
+          pregnancy_profile: scope,
+          recorded_at: { gte: monthStart },
+        },
+      }),
+      this.prisma.riskAssessment.findMany({
+        where: { pregnancy_profile: scope },
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        take: 5,
+        select: {
+          pregnancy_profile_id: true,
+          risk_badge: true,
+          risk_factors: true,
+          created_at: true,
+          pregnancy_profile: {
+            select: { user: { select: { full_name: true } } },
           },
         },
       }),
@@ -183,7 +294,29 @@ export class BidanService {
       risk_distribution: riskDistribution,
       overdue_checkins: overdueCheckins,
       nifas_count: nifasCount,
+      anc_this_month: ancThisMonth,
+      latest_alerts: latestAlerts.map((alert) => ({
+        pregnancy_profile_id: alert.pregnancy_profile_id,
+        patient_name: alert.pregnancy_profile.user.full_name,
+        risk_badge: alert.risk_badge,
+        risk_factors: this.toStringArray(alert.risk_factors),
+        occurred_at: alert.created_at,
+      })),
     };
+  }
+
+  async getAlerts(requester: CurrentUserData, query: { risk_badge?: RiskBadge; from?: string; to?: string; limit: number; offset: number }) {
+    const profileScope = this.buildProfileScope(requester);
+    const where: Prisma.RiskAssessmentWhereInput = {
+      pregnancy_profile: profileScope,
+      ...(query.risk_badge && { risk_badge: query.risk_badge }),
+      ...(query.from || query.to ? { created_at: { ...(query.from && { gte: new Date(query.from) }), ...(query.to && { lte: new Date(query.to) }) } } : {}),
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.riskAssessment.findMany({ where, skip: query.offset, take: query.limit, orderBy: [{ created_at: 'desc' }, { id: 'desc' }], select: { pregnancy_profile_id: true, risk_badge: true, risk_factors: true, recommendation_text: true, created_at: true, pregnancy_profile: { select: { user: { select: { full_name: true } } } } } }),
+      this.prisma.riskAssessment.count({ where }),
+    ]);
+    return { data: rows.map(({ pregnancy_profile, created_at, ...row }) => ({ ...row, patient_name: pregnancy_profile.user.full_name, occurred_at: created_at })), total, limit: query.limit, offset: query.offset };
   }
 
   calculateGestationalWeek(hpht: Date, endedAt?: Date | null): number {
@@ -329,37 +462,26 @@ export class BidanService {
       diastolic: number | null;
       weight_kg: { toString(): string } | null;
       fundal_height_cm: { toString(): string } | null;
-      protein_urine: string | null;
       platelet_count: { toString(): string } | null;
     } | null,
   ) {
-    if (!anc) {
+    if (
+      !anc ||
+      anc.systolic === null ||
+      anc.diastolic === null ||
+      anc.weight_kg === null
+    ) {
       return null;
     }
 
-    const parts: string[] = [];
-
-    if (anc.systolic !== null || anc.diastolic !== null) {
-      parts.push(`TD ${anc.systolic ?? '-'}/${anc.diastolic ?? '-'} mmHg`);
-    }
-
-    if (anc.weight_kg !== null) {
-      parts.push(`BB ${anc.weight_kg.toString()} kg`);
-    }
-
-    if (anc.fundal_height_cm !== null) {
-      parts.push(`TFU ${anc.fundal_height_cm.toString()} cm`);
-    }
-
-    if (anc.protein_urine !== null) {
-      parts.push(`Protein urine ${anc.protein_urine}`);
-    }
-
-    if (anc.platelet_count !== null) {
-      parts.push(`Trombosit ${anc.platelet_count.toString()}`);
-    }
-
-    return parts.length > 0 ? parts.join(', ') : null;
+    return {
+      systolic: anc.systolic,
+      diastolic: anc.diastolic,
+      weight_kg: anc.weight_kg.toString(),
+      fundal_height_cm: anc.fundal_height_cm?.toString() ?? null,
+      platelet_count:
+        anc.platelet_count === null ? null : Number(anc.platelet_count.toString()),
+    };
   }
 
   private buildRecentSymptoms(
@@ -424,5 +546,23 @@ export class BidanService {
 
   private toDateOnly(value: Date) {
     return value.toISOString().slice(0, 10);
+  }
+
+  private serializeDecimals<T>(value: T): T {
+    if (value === null || value === undefined) return value;
+    if (Array.isArray(value)) {
+      return value.map((item) => this.serializeDecimals(item)) as T;
+    }
+    if (value instanceof Date) return value;
+    if (Prisma.Decimal.isDecimal(value)) return value.toString() as T;
+    if (typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [
+          key,
+          this.serializeDecimals(item),
+        ]),
+      ) as T;
+    }
+    return value;
   }
 }

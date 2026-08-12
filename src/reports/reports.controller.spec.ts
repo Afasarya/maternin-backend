@@ -48,7 +48,10 @@ describe('ReportsController', () => {
     },
     generated_at: new Date('2026-07-30T10:00:00.000Z'),
   };
-  const reportsService = { generateMonthlyReport: jest.fn() };
+  const reportsService = {
+    generateMonthlyReport: jest.fn(),
+    exportMonthlyCsv: jest.fn(),
+  };
   let authenticatedUser: CurrentUserData = requester;
   let app: INestApplication<App>;
 
@@ -88,6 +91,9 @@ describe('ReportsController', () => {
     jest.clearAllMocks();
     authenticatedUser = requester;
     reportsService.generateMonthlyReport.mockResolvedValue(report);
+    reportsService.exportMonthlyCsv.mockResolvedValue(
+      '\uFEFF"metric","value"\r\n"total","1"',
+    );
   });
 
   it('routes a transformed monthly report query', async () => {
@@ -165,5 +171,20 @@ describe('ReportsController', () => {
       authenticatedUser,
       {},
     );
+  });
+
+  it('exports CSV with safe attachment headers', async () => {
+    await request(app.getHttpServer())
+      .get('/reports/monthly/export?month=8&year=2026')
+      .expect('Content-Type', /text\/csv/)
+      .expect(
+        'Content-Disposition',
+        'attachment; filename="maternin-report-2026-08.csv"',
+      )
+      .expect(200);
+    expect(reportsService.exportMonthlyCsv).toHaveBeenCalledWith(requester, {
+      month: 8,
+      year: 2026,
+    });
   });
 });

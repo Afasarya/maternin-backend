@@ -16,11 +16,14 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsEnum,
   Max,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
 import { ConsultationStatus } from '../common/constants/index.js';
+import { PaymentStatus } from '../common/constants/index.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -38,6 +41,19 @@ class MessageDto {
 class PageDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 20;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset = 0;
+}
+class DoctorConsultationsQueryDto extends PageDto {
+  @IsOptional() @IsEnum(ConsultationStatus) status?: ConsultationStatus;
+  @IsOptional() @IsDateString() date_from?: string;
+  @IsOptional() @IsDateString() date_to?: string;
+}
+class AdminConsultationsQueryDto extends DoctorConsultationsQueryDto {
+  @IsOptional() @IsUUID() doctor_id?: string;
+  @IsOptional() @IsEnum(PaymentStatus) payment_status?: PaymentStatus;
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
 }
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -88,11 +104,20 @@ export class ConsultationsController {
     return this.service.send(id, dto.message, user);
   }
   @Get('doctor/consultations') @Roles('dokter') doctor(
+    @Query() query: DoctorConsultationsQueryDto,
     @CurrentUser() user: CurrentUserData,
   ) {
-    return this.service.listDoctor(user);
+    return this.service.listDoctor(user, query);
   }
-  @Get('admin/consultations') @Roles('admin') admin() {
-    return this.service.listAdmin();
+  @Get('admin/consultations')
+  @Roles('admin')
+  admin(@Query() query: AdminConsultationsQueryDto) {
+    return this.service.listAdmin(query);
+  }
+
+  @Get('admin/consultations/:id')
+  @Roles('admin')
+  adminDetail(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.adminDetail(id);
   }
 }

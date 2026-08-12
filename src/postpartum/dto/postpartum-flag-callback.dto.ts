@@ -4,8 +4,9 @@ export class PostpartumFlagCallbackDto {
   @IsUUID()
   pregnancy_profile_id!: string;
 
+  @IsOptional()
   @IsUUID()
-  postpartum_log_id!: string;
+  postpartum_log_id?: string;
 
   @IsBoolean()
   red_flag_triggered!: boolean;

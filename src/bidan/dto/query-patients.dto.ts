@@ -24,6 +24,10 @@ export class QueryPatientsDto {
   search?: string;
 
   @IsOptional()
+  @IsString()
+  puskesmas_id?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
