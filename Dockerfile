@@ -29,6 +29,7 @@ RUN apt-get update \
 COPY --from=build --chown=nestjs:nodejs /app/package.json /app/package-lock.json ./
 COPY --from=build --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=build --chown=nestjs:nodejs /app/prisma ./prisma
 
 USER nestjs
 EXPOSE 3000
