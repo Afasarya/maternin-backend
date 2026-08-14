@@ -149,6 +149,7 @@ describe('ChatService', () => {
     await expect(service.sendMessage(dto, owner, requestId)).resolves.toEqual({
       status: 'processing',
       message: 'Sedang diproses',
+      user_message_id: userMessageId,
     });
 
     expect(queue.add).toHaveBeenCalledWith(

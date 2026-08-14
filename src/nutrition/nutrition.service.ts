@@ -32,7 +32,11 @@ export class NutritionService {
     this.windowHours = config.get<number>('NUTRITION_PROMPT_WINDOW_HOURS', 6);
   }
 
-  async parse(dto: ParseNutritionDto, requester: CurrentUserData, requestId: string) {
+  async parse(
+    dto: ParseNutritionDto,
+    requester: CurrentUserData,
+    requestId: string,
+  ) {
     await this.profiles.findOne(dto.pregnancy_profile_id, requester);
     return this.ai.parseNutrition(dto, requestId);
   }
@@ -47,38 +51,58 @@ export class NutritionService {
       });
       if (existing) {
         if (existing.status !== 'failed') {
-          return { status: existing.status, log_id: existing.id, duplicate: true };
+          return {
+            status: existing.status,
+            log_id: existing.id,
+            duplicate: true,
+          };
         }
         // Retry provider setelah kegagalan AI harus boleh memproses ulang.
         // Hapus audit failed lama agar unique provider_message_id dapat dipakai lagi.
-        await this.prisma.nutritionActivityLog.delete({ where: { id: existing.id } });
+        await this.prisma.nutritionActivityLog.delete({
+          where: { id: existing.id },
+        });
       }
     }
     const user = await this.prisma.user.findFirst({
       where: { phone_number: { in: this.phoneCandidates(normalizedPhone) } },
-      select: { pregnancy_profiles: {
-        where: { status: 'hamil' }, orderBy: { created_at: 'desc' }, take: 1,
-        select: { id: true, nutrition_prompt_window: true },
-      } },
+      select: {
+        pregnancy_profiles: {
+          where: { status: 'hamil' },
+          orderBy: { created_at: 'desc' },
+          take: 1,
+          select: { id: true, nutrition_prompt_window: true },
+        },
+      },
     });
     const profile = user?.pregnancy_profiles[0];
     if (!profile) {
-      await this.prisma.nutritionActivityLog.create({ data: {
-        provider_message_id: providerMessageId,
-        raw_message: dto.message, sender_phone: normalizedPhone,
-        sender_matched: false, status: 'unmatched_sender',
-      } });
+      await this.prisma.nutritionActivityLog.create({
+        data: {
+          provider_message_id: providerMessageId,
+          raw_message: dto.message,
+          sender_phone: normalizedPhone,
+          sender_matched: false,
+          status: 'unmatched_sender',
+        },
+      });
       // Privacy guardrail: unknown senders never reach AI/chat/Fonnte outbound.
       return { status: 'ignored', sender_matched: false };
     }
 
-    const inWindow = profile.nutrition_prompt_window?.window_closes_at &&
+    const inWindow =
+      profile.nutrition_prompt_window?.window_closes_at &&
       profile.nutrition_prompt_window.window_closes_at > new Date();
     if (!inWindow) {
-      const chat = await this.chat.sendTrustedWebhookMessage(profile.id, dto.message, requestId);
-      const reply = 'reply' in chat
-        ? chat.reply
-        : 'Pesan Ibu sudah diterima dan sedang diproses. Jawaban akan disiapkan sebentar lagi. 💛';
+      const chat = await this.chat.sendTrustedWebhookMessage(
+        profile.id,
+        dto.message,
+        requestId,
+      );
+      const reply =
+        'reply' in chat
+          ? chat.reply
+          : 'Pesan Ibu sudah diterima dan sedang diproses. Jawaban akan disiapkan sebentar lagi. 💛';
       const delivery = await this.notifications.sendNotification(
         NotificationChannel.WA_PATIENT,
         profile.id,
@@ -94,17 +118,20 @@ export class NutritionService {
 
     try {
       const parsed = await this.ai.parseNutrition(
-        { pregnancy_profile_id: profile.id, raw_message: dto.message }, requestId,
+        { pregnancy_profile_id: profile.id, raw_message: dto.message },
+        requestId,
       );
       const lowConfidence = parsed.confidence_score < LOW_CONFIDENCE_THRESHOLD;
       const mealPeriod = this.resolveMealPeriod(dto.message, new Date());
       const dailyTotals = this.resolveDailyTotals(parsed);
       const persisted = await this.prisma.$transaction(async (transaction) => {
         const daily = await transaction.nutritionDailyLog.upsert({
-          where: { pregnancy_profile_id_log_date: {
-            pregnancy_profile_id: profile.id,
-            log_date: this.toJakartaDate(new Date()),
-          } },
+          where: {
+            pregnancy_profile_id_log_date: {
+              pregnancy_profile_id: profile.id,
+              log_date: this.toJakartaDate(new Date()),
+            },
+          },
           create: {
             pregnancy_profile_id: profile.id,
             log_date: this.toJakartaDate(new Date()),
@@ -123,26 +150,36 @@ export class NutritionService {
             entry_count: { increment: 1 },
           },
         });
-        const entry = await transaction.nutritionActivityLog.create({ data: {
-          provider_message_id: providerMessageId,
-          pregnancy_profile_id: profile.id,
-          nutrition_daily_log_id: daily.id,
-          meal_period: mealPeriod,
-          raw_message: dto.message,
-          sender_phone: normalizedPhone, sender_matched: true,
-          parsed_calories: parsed.calories, parsed_iron_mg: parsed.iron_mg,
-          parsed_activity: parsed.activity, confidence_score: parsed.confidence_score,
-          parsed_items: parsed.parsed_items ?? [],
-          nutrition_per_item: (parsed.nutrition_per_item ?? []) as unknown as Prisma.InputJsonValue,
-          insight_text: parsed.insight_text,
-          status: lowConfidence ? 'low_confidence' : 'processed',
-        } });
+        const entry = await transaction.nutritionActivityLog.create({
+          data: {
+            provider_message_id: providerMessageId,
+            pregnancy_profile_id: profile.id,
+            nutrition_daily_log_id: daily.id,
+            meal_period: mealPeriod,
+            raw_message: dto.message,
+            sender_phone: normalizedPhone,
+            sender_matched: true,
+            parsed_calories: parsed.calories,
+            parsed_iron_mg: parsed.iron_mg,
+            parsed_activity: parsed.activity,
+            confidence_score: parsed.confidence_score,
+            parsed_items: parsed.parsed_items ?? [],
+            nutrition_per_item: (parsed.nutrition_per_item ??
+              []) as unknown as Prisma.InputJsonValue,
+            insight_text: parsed.insight_text,
+            status: lowConfidence ? 'low_confidence' : 'processed',
+          },
+        });
         return { entry, daily };
       });
       const log = persisted.entry;
       const reply = lowConfidence
         ? this.buildClarificationMessage()
-        : this.buildNutritionAcknowledgement(parsed, mealPeriod, persisted.daily);
+        : this.buildNutritionAcknowledgement(
+            parsed,
+            mealPeriod,
+            persisted.daily,
+          );
       const delivery = await this.notifications.sendNotification(
         NotificationChannel.WA_PATIENT,
         profile.id,
@@ -155,11 +192,16 @@ export class NutritionService {
         reply_sent: delivery.success,
       };
     } catch (error: unknown) {
-      await this.prisma.nutritionActivityLog.create({ data: {
-        provider_message_id: providerMessageId,
-        pregnancy_profile_id: profile.id, raw_message: dto.message,
-        sender_phone: normalizedPhone, sender_matched: true, status: 'failed',
-      } });
+      await this.prisma.nutritionActivityLog.create({
+        data: {
+          provider_message_id: providerMessageId,
+          pregnancy_profile_id: profile.id,
+          raw_message: dto.message,
+          sender_phone: normalizedPhone,
+          sender_matched: true,
+          status: 'failed',
+        },
+      });
       throw error;
     }
   }
@@ -186,59 +228,100 @@ export class NutritionService {
       where: { id: dto.pregnancy_profile_id },
       select: { user: { select: { full_name: true, puskesmas_id: true } } },
     });
-    if (!profile) throw new NotFoundException('Profil kehamilan tidak ditemukan');
+    if (!profile)
+      throw new NotFoundException('Profil kehamilan tidak ditemukan');
     if (!profile.user.puskesmas_id) return { notification_count: 0 };
     const midwives = await this.prisma.user.findMany({
       where: { role: 'bidan', puskesmas_id: profile.user.puskesmas_id },
       select: { phone_number: true },
     });
     const message = `[MaternIn] Anomali nutrisi pasien ${profile.user.full_name}: ${dto.reason}. Mohon ditindaklanjuti.`;
-    await Promise.all(midwives.map((midwife) => this.notifications.sendNotification(
-      NotificationChannel.WA_BIDAN, dto.pregnancy_profile_id, midwife.phone_number, message,
-    )));
+    await Promise.all(
+      midwives.map((midwife) =>
+        this.notifications.sendNotification(
+          NotificationChannel.WA_BIDAN,
+          dto.pregnancy_profile_id,
+          midwife.phone_number,
+          message,
+        ),
+      ),
+    );
     return { notification_count: midwives.length };
   }
 
   async sendDailyPrompts() {
     const profiles = await this.prisma.pregnancyProfile.findMany({
       where: { status: 'hamil' },
-      select: { id: true, hpht: true, user: { select: { full_name: true, phone_number: true } },
-        nutrition_activity_logs: { where: { sender_matched: true }, orderBy: { created_at: 'desc' }, take: 7 } },
+      select: {
+        id: true,
+        hpht: true,
+        user: { select: { full_name: true, phone_number: true } },
+        nutrition_activity_logs: {
+          where: { sender_matched: true },
+          orderBy: { created_at: 'desc' },
+          take: 7,
+        },
+      },
     });
     let sent = 0;
     for (const profile of profiles) {
       try {
-        const generated = await this.ai.chat({ pregnancy_profile_id: profile.id,
-          message: `Buat pesan WhatsApp harian untuk ibu hamil bernama ${profile.user.full_name}. Gunakan bahasa Indonesia yang hangat, suportif, personal, dan mudah dipahami; sapa dengan “Bu”, gunakan 1–2 emoji lembut, serta hindari nada kaku atau menggurui. Berikan satu rekomendasi nutrisi praktis dan satu aktivitas ringan yang aman, tanpa klaim diagnosis. Personalisasi berdasarkan HPHT ${profile.hpht.toISOString()} dan histori: ${JSON.stringify(profile.nutrition_activity_logs)}. Tutup dengan pertanyaan ramah yang mengajak Ibu membalas laporan makanan, minuman, atau aktivitas menggunakan bahasa sehari-hari. Panjang maksimal 90 kata.`,
-        }, randomUUID());
-        const result = await this.notifications.sendNotification(
-          NotificationChannel.WA_PATIENT, profile.id, profile.user.phone_number, generated.reply,
+        const generated = await this.ai.chat(
+          {
+            pregnancy_profile_id: profile.id,
+            message: `Buat pesan WhatsApp harian untuk ibu hamil bernama ${profile.user.full_name}. Gunakan bahasa Indonesia yang hangat, suportif, personal, dan mudah dipahami; sapa dengan “Bu”, gunakan 1–2 emoji lembut, serta hindari nada kaku atau menggurui. Berikan satu rekomendasi nutrisi praktis dan satu aktivitas ringan yang aman, tanpa klaim diagnosis. Personalisasi berdasarkan HPHT ${profile.hpht.toISOString()} dan histori: ${JSON.stringify(profile.nutrition_activity_logs)}. Tutup dengan pertanyaan ramah yang mengajak Ibu membalas laporan makanan, minuman, atau aktivitas menggunakan bahasa sehari-hari. Panjang maksimal 90 kata.`,
+          },
+          randomUUID(),
         );
-        if (result.success) { await this.openPromptWindow(profile.id); sent += 1; }
-      } catch { /* Satu pasien gagal tidak menghentikan batch. */ }
+        const result = await this.notifications.sendNotification(
+          NotificationChannel.WA_PATIENT,
+          profile.id,
+          profile.user.phone_number,
+          generated.reply,
+        );
+        if (result.success) {
+          await this.openPromptWindow(profile.id);
+          sent += 1;
+        }
+      } catch {
+        /* Satu pasien gagal tidak menghentikan batch. */
+      }
     }
     return { profile_count: profiles.length, sent_count: sent };
   }
 
   async evaluateTrends() {
-    const profiles = await this.prisma.pregnancyProfile.findMany({ where: { status: 'hamil' }, select: { id: true } });
+    const profiles = await this.prisma.pregnancyProfile.findMany({
+      where: { status: 'hamil' },
+      select: { id: true },
+    });
     let anomalies = 0;
     for (const profile of profiles) {
       const history = await this.prisma.nutritionActivityLog.findMany({
-        where: { pregnancy_profile_id: profile.id, sender_matched: true,
-          created_at: { gte: new Date(Date.now() - 7 * 86_400_000) } }, orderBy: { created_at: 'asc' },
+        where: {
+          pregnancy_profile_id: profile.id,
+          sender_matched: true,
+          created_at: { gte: new Date(Date.now() - 7 * 86_400_000) },
+        },
+        orderBy: { created_at: 'asc' },
       });
       if (!history.length) continue;
       try {
         const result = await this.ai.evaluateNutritionTrend(
-          { pregnancy_profile_id: profile.id, history }, randomUUID(),
+          { pregnancy_profile_id: profile.id, history },
+          randomUUID(),
         );
         if (result.anomaly_detected) {
           // PROVISIONAL: red flags/3-day nutrient thresholds require nutritionist/Sp.OG validation.
-          await this.handleAnomaly({ pregnancy_profile_id: profile.id, ...result });
+          await this.handleAnomaly({
+            pregnancy_profile_id: profile.id,
+            ...result,
+          });
           anomalies += 1;
         }
-      } catch (error) { if (!(error instanceof AiServiceUnavailableException)) throw error; }
+      } catch (error) {
+        if (!(error instanceof AiServiceUnavailableException)) throw error;
+      }
     }
     return { evaluated_count: profiles.length, anomaly_count: anomalies };
   }
@@ -248,27 +331,39 @@ export class NutritionService {
     const closes = new Date(now.getTime() + this.windowHours * 3_600_000);
     return this.prisma.nutritionPromptWindow.upsert({
       where: { pregnancy_profile_id: profileId },
-      create: { pregnancy_profile_id: profileId, last_prompt_sent_at: now, window_closes_at: closes },
+      create: {
+        pregnancy_profile_id: profileId,
+        last_prompt_sent_at: now,
+        window_closes_at: closes,
+      },
       update: { last_prompt_sent_at: now, window_closes_at: closes },
     });
   }
 
-  private buildNutritionAcknowledgement(parsed: {
-    calories: number | null;
-    iron_mg: number | null;
-    activity: string | null;
-    parsed_items?: Array<{ name: string; portion_estimate: string }>;
-    nutrition_per_item?: Array<{
-      name: string;
-      nutrition: { protein_g: number; kalsium_mg: number; catatan_ibu_hamil: string | null };
-    }>;
-  }, mealPeriod: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'mixed', daily: {
-    total_calories: unknown;
-    total_iron_mg: unknown;
-    total_protein_g: unknown;
-    total_calcium_mg: unknown;
-    entry_count: number;
-  }) {
+  private buildNutritionAcknowledgement(
+    parsed: {
+      calories: number | null;
+      iron_mg: number | null;
+      activity: string | null;
+      parsed_items?: Array<{ name: string; portion_estimate: string }>;
+      nutrition_per_item?: Array<{
+        name: string;
+        nutrition: {
+          protein_g: number;
+          kalsium_mg: number;
+          catatan_ibu_hamil: string | null;
+        };
+      }>;
+    },
+    mealPeriod: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'mixed',
+    daily: {
+      total_calories: unknown;
+      total_iron_mg: unknown;
+      total_protein_g: unknown;
+      total_calcium_mg: unknown;
+      entry_count: number;
+    },
+  ) {
     const periodLabel = {
       breakfast: 'sarapan',
       lunch: 'makan siang',
@@ -277,8 +372,12 @@ export class NutritionService {
       mixed: 'beberapa waktu makan',
     }[mealPeriod];
     const details = [
-      parsed.calories !== null ? `• Perkiraan energi: ${parsed.calories} kkal` : null,
-      parsed.iron_mg !== null ? `• Perkiraan zat besi: ${parsed.iron_mg} mg` : null,
+      parsed.calories !== null
+        ? `• Perkiraan energi: ${parsed.calories} kkal`
+        : null,
+      parsed.iron_mg !== null
+        ? `• Perkiraan zat besi: ${parsed.iron_mg} mg`
+        : null,
       parsed.activity ? `• Aktivitas: ${parsed.activity}` : null,
       ...(parsed.parsed_items ?? []).map(
         (item) => `• ${item.name}: sekitar ${item.portion_estimate}`,
@@ -293,7 +392,9 @@ export class NutritionService {
 
     return [
       `Terima kasih, Bu. Laporan ${periodLabel} sudah MaternIn catat. 🌷`,
-      details.length > 0 ? details.join('\n') : 'Makanan atau aktivitas Ibu sudah masuk ke catatan harian.',
+      details.length > 0
+        ? details.join('\n')
+        : 'Makanan atau aktivitas Ibu sudah masuk ke catatan harian.',
       [
         `Total hari ini dari ${daily.entry_count} laporan:`,
         `• Energi: ${Number(daily.total_calories)} kkal`,
@@ -306,11 +407,17 @@ export class NutritionService {
     ].join('\n\n');
   }
 
-  private nextMealPrompt(mealPeriod: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'mixed') {
-    if (mealPeriod === 'breakfast') return 'Nanti setelah makan siang, Ibu boleh kirim laporan berikutnya dengan awalan “Makan siang…”. 💛';
-    if (mealPeriod === 'lunch') return 'Kalau Ibu ngemil, tulis “Camilan…”; setelah makan malam, tulis “Makan malam…”. 💛';
-    if (mealPeriod === 'snack') return 'Saat makan utama berikutnya, awali pesan dengan “Makan siang…” atau “Makan malam…”. 💛';
-    if (mealPeriod === 'dinner') return 'Laporan makan hari ini sudah bertambah. Besok Ibu bisa mulai lagi dengan pesan “Sarapan…”. 💛';
+  private nextMealPrompt(
+    mealPeriod: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'mixed',
+  ) {
+    if (mealPeriod === 'breakfast')
+      return 'Nanti setelah makan siang, Ibu boleh kirim laporan berikutnya dengan awalan “Makan siang…”. 💛';
+    if (mealPeriod === 'lunch')
+      return 'Kalau Ibu ngemil, tulis “Camilan…”; setelah makan malam, tulis “Makan malam…”. 💛';
+    if (mealPeriod === 'snack')
+      return 'Saat makan utama berikutnya, awali pesan dengan “Makan siang…” atau “Makan malam…”. 💛';
+    if (mealPeriod === 'dinner')
+      return 'Laporan makan hari ini sudah bertambah. Besok Ibu bisa mulai lagi dengan pesan “Sarapan…”. 💛';
     return 'Laporan beberapa waktu makan sudah dicatat. Berikutnya sebutkan “Sarapan”, “Makan siang”, “Camilan”, atau “Makan malam” agar lebih rapi. 💛';
   }
 
@@ -318,7 +425,11 @@ export class NutritionService {
     items: Array<{ nutrition: { protein_g: number; kalsium_mg: number } }>,
     key: 'protein_g' | 'kalsium_mg',
   ) {
-    return Math.round(items.reduce((sum, item) => sum + item.nutrition[key], 0) * 100) / 100;
+    return (
+      Math.round(
+        items.reduce((sum, item) => sum + item.nutrition[key], 0) * 100,
+      ) / 100
+    );
   }
 
   private resolveDailyTotals(parsed: {
@@ -332,7 +443,10 @@ export class NutritionService {
       calories: parsed.calories ?? 0,
       ironMg: parsed.iron_mg ?? 0,
       proteinG: this.sumNutrition(parsed.nutrition_per_item ?? [], 'protein_g'),
-      calciumMg: this.sumNutrition(parsed.nutrition_per_item ?? [], 'kalsium_mg'),
+      calciumMg: this.sumNutrition(
+        parsed.nutrition_per_item ?? [],
+        'kalsium_mg',
+      ),
     };
   }
 
@@ -345,11 +459,16 @@ export class NutritionService {
       /\b(ngemil|nyemil|camilan|snack)\b/.test(text) ? 'snack' : null,
     ].filter((period): period is string => period !== null);
     if (explicitPeriods.length > 1) return 'mixed' as const;
-    if (explicitPeriods.length === 1) return explicitPeriods[0] as 'breakfast' | 'lunch' | 'dinner' | 'snack';
+    if (explicitPeriods.length === 1)
+      return explicitPeriods[0] as 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
-    const jakartaHour = Number(new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Asia/Jakarta', hour: '2-digit', hour12: false,
-    }).format(receivedAt));
+    const jakartaHour = Number(
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit',
+        hour12: false,
+      }).format(receivedAt),
+    );
     if (jakartaHour >= 4 && jakartaHour < 10) return 'breakfast' as const;
     if (jakartaHour >= 10 && jakartaHour < 15) return 'lunch' as const;
     if (jakartaHour >= 18 && jakartaHour <= 23) return 'dinner' as const;
@@ -358,10 +477,16 @@ export class NutritionService {
 
   private toJakartaDate(value: Date) {
     const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     }).formatToParts(value);
-    const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
-    return new Date(`${get('year')}-${get('month')}-${get('day')}T00:00:00.000Z`);
+    const get = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value;
+    return new Date(
+      `${get('year')}-${get('month')}-${get('day')}T00:00:00.000Z`,
+    );
   }
 
   private buildClarificationMessage() {

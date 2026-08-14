@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
   IsDateString,
   IsInt,
@@ -34,9 +35,14 @@ class CreateDto {
   @IsUUID() pregnancy_profile_id!: string;
   @IsUUID() doctor_id!: string;
   @IsDateString() scheduled_at!: string;
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @MinLength(2) @MaxLength(100) topic!: string;
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @MinLength(5) @MaxLength(2000) complaint!: string;
 }
 class MessageDto {
-  @IsString() @MinLength(1) message!: string;
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @MinLength(1) @MaxLength(2000) message!: string;
 }
 class PageDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 20;
@@ -76,6 +82,12 @@ export class ConsultationsController {
     @CurrentUser() user: CurrentUserData,
   ) {
     return this.service.detail(id, user);
+  }
+  @Get('consultations/:id/payment-status') @Roles('ibu_hamil') paymentStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return this.service.paymentStatus(id, user);
   }
   @Patch('consultations/:id/cancel') @Roles('ibu_hamil') cancel(
     @Param('id', ParseUUIDPipe) id: string,

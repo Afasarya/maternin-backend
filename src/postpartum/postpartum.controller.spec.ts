@@ -183,14 +183,14 @@ describe('PostpartumController', () => {
         // eslint-disable-next-line @typescript-eslint/unbound-method
         PostpartumController.prototype.findByProfile,
       ),
-    ).toEqual(['ibu_hamil', 'bidan', 'admin']);
+    ).toEqual(['ibu_hamil', 'bidan', 'kader', 'admin']);
     expect(
       Reflect.getMetadata(
         'roles',
         // eslint-disable-next-line @typescript-eslint/unbound-method
         PostpartumController.prototype.findOne,
       ),
-    ).toEqual(['ibu_hamil', 'bidan', 'admin']);
+    ).toEqual(['ibu_hamil', 'bidan', 'kader', 'admin']);
   });
 
   it('routes paginated and sorted history', async () => {

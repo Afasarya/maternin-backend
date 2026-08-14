@@ -26,6 +26,16 @@ export interface NominatimResult {
 
 export type NearbyFacility = NominatimResult & { distance_m: number };
 
+const SEMARANG_FACILITIES: NominatimResult[] = [
+  { place_id: -101, lat: '-6.9949', lon: '110.4077', display_name: 'RSUP Dr. Kariadi, Semarang', type: 'hospital' },
+  { place_id: -102, lat: '-7.0062', lon: '110.4381', display_name: 'RS Roemani Muhammadiyah, Semarang', type: 'hospital' },
+  { place_id: -103, lat: '-6.9835', lon: '110.4118', display_name: 'RS Hermina Pandanaran, Semarang', type: 'hospital' },
+  { place_id: -104, lat: '-7.0333', lon: '110.4099', display_name: 'RS Nasional Diponegoro, Tembalang', type: 'hospital' },
+  { place_id: -105, lat: '-6.9721', lon: '110.4286', display_name: 'Puskesmas Halmahera, Semarang', type: 'clinic' },
+  { place_id: -106, lat: '-7.0056', lon: '110.4135', display_name: 'Puskesmas Kagok, Semarang', type: 'clinic' },
+  { place_id: -107, lat: '-6.9690', lon: '110.3977', display_name: 'Puskesmas Bulu Lor, Semarang', type: 'clinic' },
+];
+
 @Injectable()
 export class FacilitiesService {
   private static readonly NEARBY_CACHE_TTL_SECONDS = 24 * 60 * 60;
@@ -46,10 +56,24 @@ export class FacilitiesService {
   }
 
   async findAll(pagination: QueryPuskesmasDto) {
-    const where = pagination.search ? { OR: [
-      { name: { contains: pagination.search, mode: 'insensitive' as const } },
-      { wilayah_kerja: { contains: pagination.search, mode: 'insensitive' as const } },
-    ] } : {};
+    const where = pagination.search
+      ? {
+          OR: [
+            {
+              name: {
+                contains: pagination.search,
+                mode: 'insensitive' as const,
+              },
+            },
+            {
+              wilayah_kerja: {
+                contains: pagination.search,
+                mode: 'insensitive' as const,
+              },
+            },
+          ],
+        }
+      : {};
     const [data, total] = await this.prisma.$transaction([
       this.prisma.puskesmas.findMany({
         skip: pagination.offset,
@@ -126,7 +150,16 @@ export class FacilitiesService {
         throw new BadGatewayException('Respons Nominatim tidak valid');
       }
 
-      const facilities = (response.data as NominatimResult[])
+      const external = response.data as NominatimResult[];
+      const merged = [...external, ...SEMARANG_FACILITIES].filter(
+        (facility, index, rows) =>
+          rows.findIndex(
+            (candidate) =>
+              candidate.display_name.toLowerCase() ===
+              facility.display_name.toLowerCase(),
+          ) === index,
+      );
+      const facilities = merged
         .map((facility) => ({
           ...facility,
           distance_m: Math.round(

@@ -102,7 +102,11 @@ export class SyncService {
       let reserved: ReservedRecord;
 
       try {
-        reserved = await this.reserveRecord(dto.device_uuid, record);
+        reserved = await this.reserveRecord(
+          dto.device_uuid,
+          record,
+          requester.id,
+        );
       } catch (error: unknown) {
         results.push({
           client_uuid: record.client_uuid,
@@ -203,15 +207,16 @@ export class SyncService {
     }
   }
 
-  async getDeviceStatus(deviceUuid: string) {
+  async getDeviceStatus(deviceUuid: string, requesterId: string) {
+    const where = { device_uuid: deviceUuid, submitted_by_id: requesterId };
     const [groups, latest] = await Promise.all([
       this.prisma.syncQueue.groupBy({
         by: ['status'],
-        where: { device_uuid: deviceUuid },
+        where,
         _count: { _all: true },
       }),
       this.prisma.syncQueue.findFirst({
-        where: { device_uuid: deviceUuid },
+        where,
         orderBy: { client_created_at: 'desc' },
         select: {
           client_uuid: true,
@@ -245,12 +250,16 @@ export class SyncService {
   private async reserveRecord(
     deviceUuid: string,
     record: SyncRecordDto,
+    requesterId: string,
   ): Promise<ReservedRecord> {
     const existing = await this.prisma.syncQueue.findUnique({
       where: { client_uuid: record.client_uuid },
     });
 
     if (existing) {
+      if (existing.submitted_by_id !== requesterId) {
+        throw new BadRequestException('client_uuid dimiliki pengguna lain');
+      }
       return this.resolveExistingRecord(existing, record, deviceUuid);
     }
 
@@ -263,6 +272,7 @@ export class SyncService {
           client_created_at: new Date(record.client_created_at),
           status: SyncStatus.PENDING,
           client_uuid: record.client_uuid,
+          submitted_by_id: requesterId,
         },
       });
 
@@ -283,6 +293,10 @@ export class SyncService {
 
       if (!winner) {
         throw error;
+      }
+
+      if (winner.submitted_by_id !== requesterId) {
+        throw new BadRequestException('client_uuid dimiliki pengguna lain');
       }
 
       return this.resolveExistingRecord(winner, record, deviceUuid);

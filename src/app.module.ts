@@ -14,6 +14,7 @@ import { ChatModule } from './chat/chat.module.js';
 import { ConsultationsModule } from './consultations/consultations.module.js';
 import { DoctorsModule } from './doctors/doctors.module.js';
 import { DoctorSchedulesModule } from './doctor-schedules/doctor-schedules.module.js';
+import { EducationModule } from './education/education.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { SupportSessionsModule } from './support-sessions/support-sessions.module.js';
 import { FacilitiesModule } from './facilities/facilities.module.js';
@@ -40,13 +41,20 @@ import { UsersModule } from './users/users.module.js';
         REDIS_URL: Joi.string().required(),
         JWT_SECRET: Joi.string().min(32).required(),
         JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
-        REFRESH_TOKEN_TTL_DAYS: Joi.number().integer().min(1).max(90).default(30),
+        REFRESH_TOKEN_TTL_DAYS: Joi.number()
+          .integer()
+          .min(1)
+          .max(90)
+          .default(30),
         INTERNAL_SERVICE_TOKEN: Joi.string().min(32).required(),
         AI_INTERNAL_SERVICE_TOKEN: Joi.string().min(32).optional(),
         FONNTE_API_KEY: Joi.string().required(),
         FONNTE_WEBHOOK_URL: Joi.string().uri().optional(),
         FONNTE_WEBHOOK_TOKEN: Joi.string().min(16).required(),
-        NUTRITION_PROMPT_WINDOW_HOURS: Joi.number().integer().positive().default(6),
+        NUTRITION_PROMPT_WINDOW_HOURS: Joi.number()
+          .integer()
+          .positive()
+          .default(6),
         AI_SERVICE_URL: Joi.string().uri().required(),
         NOMINATIM_BASE_URL: Joi.string()
           .uri()
@@ -94,6 +102,9 @@ import { UsersModule } from './users/users.module.js';
 
     // ─── Pregnancy profile lifecycle ───
     PregnancyProfilesModule,
+
+    // ─── Curated maternal education by trimester ───
+    EducationModule,
 
     // ─── Antenatal care records ───
     AncRecordsModule,

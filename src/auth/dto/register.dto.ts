@@ -1,38 +1,31 @@
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
-  IsEnum,
-  IsPhoneNumber,
+  Matches,
   IsString,
-  IsUUID,
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { UserRole } from '../../common/constants/index.js';
+import {
+  INDONESIA_PHONE_PATTERN,
+  normalizeIndonesiaPhone,
+} from '../phone-number.util.js';
 
 export class RegisterDto {
   @IsString()
-  full_name: string;
+  full_name!: string;
 
-  @IsPhoneNumber()
-  phone_number: string;
+  @Transform(({ value }: { value: unknown }) => normalizeIndonesiaPhone(value))
+  @Matches(INDONESIA_PHONE_PATTERN, {
+    message: 'Nomor telepon harus diawali 08, 62, atau +62',
+  })
+  phone_number!: string;
 
   @IsString()
   @MinLength(8)
-  password: string;
-
-  @IsEnum(UserRole)
-  role: UserRole;
+  password!: string;
 
   @ValidateIf((_, value: unknown) => value !== undefined)
   @IsEmail()
   email?: string;
-
-  @ValidateIf(
-    (dto: RegisterDto, value: unknown) =>
-      value !== undefined ||
-      dto.role === UserRole.BIDAN ||
-      dto.role === UserRole.KADER,
-  )
-  @IsUUID()
-  puskesmas_id?: string;
 }

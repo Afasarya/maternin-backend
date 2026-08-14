@@ -132,27 +132,27 @@ export class BidanService {
     );
     const [ancHistory, riskAssessments, symptomCheckins, postpartumLogs] =
       await Promise.all([
-      this.prisma.ancRecord.findMany({
-        where: { pregnancy_profile_id: profileId },
-        orderBy: [{ recorded_at: 'desc' }, { id: 'desc' }],
-        take: BidanService.RECENT_RECORD_LIMIT,
-      }),
-      this.prisma.riskAssessment.findMany({
-        where: { pregnancy_profile_id: profileId },
-        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-        take: BidanService.RECENT_RECORD_LIMIT,
-      }),
-      this.prisma.symptomCheckin.findMany({
-        where: { pregnancy_profile_id: profileId },
-        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-        take: BidanService.RECENT_RECORD_LIMIT,
-        select: { answers: true, created_at: true },
-      }),
-      this.prisma.postpartumLog.findMany({
-        where: { pregnancy_profile_id: profileId },
-        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-        take: BidanService.RECENT_RECORD_LIMIT,
-      }),
+        this.prisma.ancRecord.findMany({
+          where: { pregnancy_profile_id: profileId },
+          orderBy: [{ recorded_at: 'desc' }, { id: 'desc' }],
+          take: BidanService.RECENT_RECORD_LIMIT,
+        }),
+        this.prisma.riskAssessment.findMany({
+          where: { pregnancy_profile_id: profileId },
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+          take: BidanService.RECENT_RECORD_LIMIT,
+        }),
+        this.prisma.symptomCheckin.findMany({
+          where: { pregnancy_profile_id: profileId },
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+          take: BidanService.RECENT_RECORD_LIMIT,
+          select: { answers: true, created_at: true },
+        }),
+        this.prisma.postpartumLog.findMany({
+          where: { pregnancy_profile_id: profileId },
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+          take: BidanService.RECENT_RECORD_LIMIT,
+        }),
       ]);
     const aiBrief = await this.aiServiceClient.generateVisitBrief(
       {
@@ -210,10 +210,18 @@ export class BidanService {
         orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
       }),
       Promise.all([
-        this.prisma.ancRecord.count({ where: { pregnancy_profile_id: profileId } }),
-        this.prisma.symptomCheckin.count({ where: { pregnancy_profile_id: profileId } }),
-        this.prisma.riskAssessment.count({ where: { pregnancy_profile_id: profileId } }),
-        this.prisma.postpartumLog.count({ where: { pregnancy_profile_id: profileId } }),
+        this.prisma.ancRecord.count({
+          where: { pregnancy_profile_id: profileId },
+        }),
+        this.prisma.symptomCheckin.count({
+          where: { pregnancy_profile_id: profileId },
+        }),
+        this.prisma.riskAssessment.count({
+          where: { pregnancy_profile_id: profileId },
+        }),
+        this.prisma.postpartumLog.count({
+          where: { pregnancy_profile_id: profileId },
+        }),
       ]),
     ]);
 
@@ -238,45 +246,45 @@ export class BidanService {
     monthStart.setUTCHours(0, 0, 0, 0);
     const [patients, nifasCount, overdueCheckins, ancThisMonth, latestAlerts] =
       await Promise.all([
-      this.getPatientSnapshot(requester),
-      this.prisma.pregnancyProfile.count({
-        where: { ...scope, status: PregnancyStatus.NIFAS },
-      }),
-      this.prisma.pregnancyProfile.count({
-        where: {
-          ...scope,
-          status: {
-            in: [PregnancyStatus.HAMIL, PregnancyStatus.NIFAS],
-          },
-          reminders: {
-            some: {
-              status: ReminderStatus.ACTIVE,
-              next_trigger_at: { lte: new Date() },
+        this.getPatientSnapshot(requester),
+        this.prisma.pregnancyProfile.count({
+          where: { ...scope, status: PregnancyStatus.NIFAS },
+        }),
+        this.prisma.pregnancyProfile.count({
+          where: {
+            ...scope,
+            status: {
+              in: [PregnancyStatus.HAMIL, PregnancyStatus.NIFAS],
+            },
+            reminders: {
+              some: {
+                status: ReminderStatus.ACTIVE,
+                next_trigger_at: { lte: new Date() },
+              },
             },
           },
-        },
-      }),
-      this.prisma.ancRecord.count({
-        where: {
-          pregnancy_profile: scope,
-          recorded_at: { gte: monthStart },
-        },
-      }),
-      this.prisma.riskAssessment.findMany({
-        where: { pregnancy_profile: scope },
-        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-        take: 5,
-        select: {
-          pregnancy_profile_id: true,
-          risk_badge: true,
-          risk_factors: true,
-          created_at: true,
-          pregnancy_profile: {
-            select: { user: { select: { full_name: true } } },
+        }),
+        this.prisma.ancRecord.count({
+          where: {
+            pregnancy_profile: scope,
+            recorded_at: { gte: monthStart },
           },
-        },
-      }),
-    ]);
+        }),
+        this.prisma.riskAssessment.findMany({
+          where: { pregnancy_profile: scope },
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+          take: 5,
+          select: {
+            pregnancy_profile_id: true,
+            risk_badge: true,
+            risk_factors: true,
+            created_at: true,
+            pregnancy_profile: {
+              select: { user: { select: { full_name: true } } },
+            },
+          },
+        }),
+      ]);
     const riskDistribution = {
       merah: 0,
       kuning: 0,
@@ -305,18 +313,112 @@ export class BidanService {
     };
   }
 
-  async getAlerts(requester: CurrentUserData, query: { risk_badge?: RiskBadge; from?: string; to?: string; limit: number; offset: number }) {
+  async getRiskMap(requester: CurrentUserData) {
+    const scope = this.buildProfileScope(requester);
+    const facilities = await this.prisma.puskesmas.findMany({
+      where:
+        requester.role === UserRole.BIDAN
+          ? { id: requester.puskesmas_id ?? undefined }
+          : undefined,
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        latitude: true,
+        longitude: true,
+        wilayah_kerja: true,
+      },
+    });
+    const profiles = await this.prisma.pregnancyProfile.findMany({
+      where: {
+        ...scope,
+        status: { in: [PregnancyStatus.HAMIL, PregnancyStatus.NIFAS] },
+      },
+      select: {
+        user: { select: { puskesmas_id: true } },
+        risk_assessments: {
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { risk_badge: true },
+        },
+      },
+    });
+
+    return facilities.map((facility) => {
+      const patients = profiles.filter(
+        (profile) => profile.user.puskesmas_id === facility.id,
+      );
+      const risk_distribution = { merah: 0, kuning: 0, hijau: 0 };
+      patients.forEach((profile) => {
+        const badge = profile.risk_assessments[0]?.risk_badge;
+        if (badge === RiskBadge.MERAH) risk_distribution.merah += 1;
+        if (badge === RiskBadge.KUNING) risk_distribution.kuning += 1;
+        if (badge === RiskBadge.HIJAU) risk_distribution.hijau += 1;
+      });
+      return {
+        puskesmas_id: facility.id,
+        puskesmas_name: facility.name,
+        latitude: facility.latitude,
+        longitude: facility.longitude,
+        wilayah_kerja: facility.wilayah_kerja,
+        total_patients: patients.length,
+        risk_distribution,
+      };
+    });
+  }
+
+  async getAlerts(
+    requester: CurrentUserData,
+    query: {
+      risk_badge?: RiskBadge;
+      from?: string;
+      to?: string;
+      limit: number;
+      offset: number;
+    },
+  ) {
     const profileScope = this.buildProfileScope(requester);
     const where: Prisma.RiskAssessmentWhereInput = {
       pregnancy_profile: profileScope,
       ...(query.risk_badge && { risk_badge: query.risk_badge }),
-      ...(query.from || query.to ? { created_at: { ...(query.from && { gte: new Date(query.from) }), ...(query.to && { lte: new Date(query.to) }) } } : {}),
+      ...(query.from || query.to
+        ? {
+            created_at: {
+              ...(query.from && { gte: new Date(query.from) }),
+              ...(query.to && { lte: new Date(query.to) }),
+            },
+          }
+        : {}),
     };
     const [rows, total] = await this.prisma.$transaction([
-      this.prisma.riskAssessment.findMany({ where, skip: query.offset, take: query.limit, orderBy: [{ created_at: 'desc' }, { id: 'desc' }], select: { pregnancy_profile_id: true, risk_badge: true, risk_factors: true, recommendation_text: true, created_at: true, pregnancy_profile: { select: { user: { select: { full_name: true } } } } } }),
+      this.prisma.riskAssessment.findMany({
+        where,
+        skip: query.offset,
+        take: query.limit,
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        select: {
+          pregnancy_profile_id: true,
+          risk_badge: true,
+          risk_factors: true,
+          recommendation_text: true,
+          created_at: true,
+          pregnancy_profile: {
+            select: { user: { select: { full_name: true } } },
+          },
+        },
+      }),
       this.prisma.riskAssessment.count({ where }),
     ]);
-    return { data: rows.map(({ pregnancy_profile, created_at, ...row }) => ({ ...row, patient_name: pregnancy_profile.user.full_name, occurred_at: created_at })), total, limit: query.limit, offset: query.offset };
+    return {
+      data: rows.map(({ pregnancy_profile, created_at, ...row }) => ({
+        ...row,
+        patient_name: pregnancy_profile.user.full_name,
+        occurred_at: created_at,
+      })),
+      total,
+      limit: query.limit,
+      offset: query.offset,
+    };
   }
 
   calculateGestationalWeek(hpht: Date, endedAt?: Date | null): number {
@@ -480,7 +582,9 @@ export class BidanService {
       weight_kg: anc.weight_kg.toString(),
       fundal_height_cm: anc.fundal_height_cm?.toString() ?? null,
       platelet_count:
-        anc.platelet_count === null ? null : Number(anc.platelet_count.toString()),
+        anc.platelet_count === null
+          ? null
+          : Number(anc.platelet_count.toString()),
     };
   }
 

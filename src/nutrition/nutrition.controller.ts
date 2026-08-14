@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Headers, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { CurrentUserData } from '../common/decorators/current-user.decorator.js';
@@ -32,7 +40,10 @@ export class NutritionLogsController {
   constructor(private readonly nutrition: NutritionService) {}
   @Get()
   @Roles('ibu_hamil', 'bidan')
-  getLogs(@Query() query: QueryNutritionLogsDto, @CurrentUser() requester: CurrentUserData) {
+  getLogs(
+    @Query() query: QueryNutritionLogsDto,
+    @CurrentUser() requester: CurrentUserData,
+  ) {
     return this.nutrition.getLogs(query, requester);
   }
 }

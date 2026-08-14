@@ -4,6 +4,8 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  BadRequestException,
+  NotFoundException,
   Post,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -51,10 +53,21 @@ export class PaymentsController {
           ? ConsultationStatus.EXPIRED
           : undefined;
     return this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.update({
+      const existing = await tx.payment.findFirst({
         where: invoiceId
           ? { xendit_invoice_id: invoiceId }
           : { consultation_id: externalId },
+        include: { consultation: true },
+      });
+      if (!existing) throw new NotFoundException('Pembayaran tidak ditemukan');
+      if (externalId && externalId !== existing.consultation_id)
+        throw new BadRequestException('external_id tidak cocok');
+      if (payload.amount !== undefined && Number(payload.amount) !== existing.amount.toNumber())
+        throw new BadRequestException('Nominal pembayaran tidak cocok');
+      if (existing.status === PaymentStatus.PAID && paymentStatus !== PaymentStatus.PAID)
+        return { received: true, status: PaymentStatus.PAID };
+      const payment = await tx.payment.update({
+        where: { id: existing.id },
         data: {
           status: paymentStatus,
           paid_at:
@@ -62,7 +75,13 @@ export class PaymentsController {
           xendit_payload: payload as Prisma.InputJsonValue,
         },
       });
-      if (consultationStatus)
+      if (
+        consultationStatus &&
+        !(existing.consultation.status === ConsultationStatus.SCHEDULED && consultationStatus === ConsultationStatus.EXPIRED) &&
+        existing.consultation.status !== ConsultationStatus.ONGOING &&
+        existing.consultation.status !== ConsultationStatus.COMPLETED &&
+        existing.consultation.status !== ConsultationStatus.CANCELLED
+      )
         await tx.consultation.update({
           where: { id: payment.consultation_id },
           data: { status: consultationStatus },

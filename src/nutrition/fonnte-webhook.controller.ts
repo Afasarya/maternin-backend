@@ -8,7 +8,10 @@ export class FonnteWebhookController {
   constructor(private readonly nutrition: NutritionService) {}
   @Post('fonnte-inbound')
   @UseGuards(FonnteWebhookAuthGuard)
-  inbound(@Body() dto: FonnteInboundDto, @Headers('x-request-id') requestId?: string) {
+  inbound(
+    @Body() dto: FonnteInboundDto,
+    @Headers('x-request-id') requestId?: string,
+  ) {
     return this.nutrition.handleInbound(dto, requestId);
   }
 }

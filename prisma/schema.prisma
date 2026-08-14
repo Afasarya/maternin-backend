@@ -171,6 +171,12 @@ enum ConsultationSenderType {
   doctor
 }
 
+enum EducationTrimester {
+  trimester_1
+  trimester_2
+  trimester_3
+}
+
 model User {
   id            String   @id @default(uuid()) @db.Uuid
   role          UserRole
@@ -190,6 +196,7 @@ model User {
   consultation_messages ConsultationMessage[]
   triage_audits        TriageBidanAudit[]
   refresh_sessions     RefreshSession[]
+  submitted_sync_items SyncQueue[]        @relation("SyncSubmittedBy")
 
   @@index([puskesmas_id])
   @@map("users")
@@ -490,8 +497,11 @@ model SyncQueue {
   synced_at         DateTime?
   status            SyncStatus      @default(pending)
   client_uuid       String          @unique @db.Uuid
+  submitted_by_id   String          @db.Uuid
+  submitted_by      User            @relation("SyncSubmittedBy", fields: [submitted_by_id], references: [id], onDelete: Cascade)
 
   @@index([device_uuid])
+  @@index([submitted_by_id, device_uuid])
   @@map("sync_queue")
 }
 
@@ -515,6 +525,7 @@ model Doctor {
   str_number     String?
   price          Decimal  @db.Decimal(10, 2)
   bio            String?
+  photo_key      String?
   is_active      Boolean  @default(true)
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
@@ -544,6 +555,9 @@ model Consultation {
   pregnancy_profile_id   String             @db.Uuid
   doctor_id              String             @db.Uuid
   scheduled_at           DateTime
+  topic                  String
+  complaint              String
+  duration_minutes       Int                @default(30)
   price_snapshot         Decimal            @db.Decimal(10, 2)
   platform_fee           Decimal            @db.Decimal(10, 2)
   status                 ConsultationStatus @default(pending_payment)
@@ -566,6 +580,8 @@ model Payment {
   consultation_id     String        @unique @db.Uuid
   xendit_invoice_id   String        @unique
   amount              Decimal       @db.Decimal(10, 2)
+  payment_url         String?
+  expires_at          DateTime?
   status              PaymentStatus @default(pending)
   paid_at             DateTime?
   xendit_payload      Json?
@@ -608,4 +624,24 @@ model ChatMessage {
 
   @@index([pregnancy_profile_id, created_at])
   @@map("chat_messages")
+}
+
+model EducationArticle {
+  id          String              @id @default(uuid()) @db.Uuid
+  title       String
+  slug        String              @unique
+  summary     String
+  content     String
+  trimester   EducationTrimester?
+  category    String
+  source_name String
+  source_url  String
+  reviewer    String
+  published   Boolean             @default(false)
+  created_at  DateTime            @default(now())
+  updated_at  DateTime            @updatedAt
+
+  @@index([published, trimester, category])
+  @@index([published, created_at])
+  @@map("education_articles")
 }

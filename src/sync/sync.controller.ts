@@ -43,7 +43,10 @@ export class SyncController {
   }
 
   @Get('status')
-  getDeviceStatus(@Query() query: SyncStatusQueryDto) {
-    return this.syncService.getDeviceStatus(query.device_uuid);
+  getDeviceStatus(
+    @Query() query: SyncStatusQueryDto,
+    @CurrentUser() requester: CurrentUserData,
+  ) {
+    return this.syncService.getDeviceStatus(query.device_uuid, requester.id);
   }
 }

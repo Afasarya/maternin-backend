@@ -117,7 +117,7 @@ describe('SyncController', () => {
     );
   });
 
-  it('returns 200 for a duplicate-only replay and an empty batch', async () => {
+  it('returns 200 for a duplicate-only replay', async () => {
     syncService.processBatch.mockResolvedValueOnce({
       created: false,
       data: {
@@ -149,29 +149,15 @@ describe('SyncController', () => {
         ],
       })
       .expect(200);
+  });
 
-    syncService.processBatch.mockResolvedValueOnce({
-      created: false,
-      data: {
-        total_received: 0,
-        processed: 0,
-        skipped: 0,
-        failed: 0,
-        results: [],
-      },
-    });
-
+  it('rejects an empty batch because records requires 1-100 items', async () => {
     await request(app.getHttpServer())
       .post('/sync/batch')
       .send({ device_uuid: deviceUuid, records: [] })
-      .expect(200)
-      .expect({
-        total_received: 0,
-        processed: 0,
-        skipped: 0,
-        failed: 0,
-        results: [],
-      });
+      .expect(400);
+
+    expect(syncService.processBatch).not.toHaveBeenCalled();
   });
 
   it('validates nested records and rejects unknown fields', async () => {
@@ -216,7 +202,10 @@ describe('SyncController', () => {
       .get(`/sync/status?device_uuid=${deviceUuid}`)
       .expect(200)
       .expect(status);
-    expect(syncService.getDeviceStatus).toHaveBeenCalledWith(deviceUuid);
+    expect(syncService.getDeviceStatus).toHaveBeenCalledWith(
+      deviceUuid,
+      currentUser.id,
+    );
 
     await request(app.getHttpServer()).get('/sync/status').expect(400);
   });

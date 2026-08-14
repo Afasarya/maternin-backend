@@ -92,9 +92,15 @@ export class UsersService {
     };
     const [data, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
-        where, skip: query.offset, take: query.limit,
+        where,
+        skip: query.offset,
+        take: query.limit,
         orderBy: [{ [query.sort]: query.direction }, { id: 'asc' }],
-        select: { ...userProfileSelect, is_active: true, puskesmas: { select: { id: true, name: true } } },
+        select: {
+          ...userProfileSelect,
+          is_active: true,
+          puskesmas: { select: { id: true, name: true } },
+        },
       }),
       this.prisma.user.count({ where }),
     ]);

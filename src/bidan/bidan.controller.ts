@@ -88,6 +88,11 @@ export class BidanController {
     return this.bidanService.getStatistics(requester);
   }
 
+  @Get('risk-map')
+  getRiskMap(@CurrentUser() requester: CurrentUserData) {
+    return this.bidanService.getRiskMap(requester);
+  }
+
   @Get('alerts')
   getAlerts(
     @CurrentUser() requester: CurrentUserData,

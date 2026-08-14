@@ -1,4 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard.js';
 import { NutritionAnomalyCallbackDto } from './dto/nutrition-anomaly-callback.dto.js';
 import { NutritionService } from './nutrition.service.js';
@@ -9,5 +16,7 @@ export class NutritionInternalController {
   @Post('nutrition-anomaly')
   @HttpCode(HttpStatus.OK)
   @UseGuards(InternalAuthGuard)
-  anomaly(@Body() dto: NutritionAnomalyCallbackDto) { return this.nutrition.handleAnomaly(dto); }
+  anomaly(@Body() dto: NutritionAnomalyCallbackDto) {
+    return this.nutrition.handleAnomaly(dto);
+  }
 }

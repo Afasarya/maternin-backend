@@ -249,9 +249,9 @@ export class PregnancyProfilesService {
       return { user_id: userId, ...statusFilter };
     }
 
-    if (role === UserRole.BIDAN) {
+    if (role === UserRole.BIDAN || role === UserRole.KADER) {
       if (!puskesmasId) {
-        throw new ForbiddenException('Bidan belum terhubung ke puskesmas');
+        throw new ForbiddenException('Petugas belum terhubung ke puskesmas');
       }
 
       return {
@@ -286,7 +286,7 @@ export class PregnancyProfilesService {
 
     const permittedStaffRole = statusUpdate
       ? requester.role === UserRole.BIDAN || requester.role === UserRole.KADER
-      : requester.role === UserRole.BIDAN;
+      : requester.role === UserRole.BIDAN || requester.role === UserRole.KADER;
 
     if (
       permittedStaffRole &&

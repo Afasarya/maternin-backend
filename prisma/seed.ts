@@ -6,6 +6,7 @@ import {
   BleedingLevel,
   ChatSenderType,
   CheckinType,
+  EducationTrimester,
   SupportSessionStatus,
   MoodFlag,
   NotificationChannel,
@@ -63,6 +64,18 @@ const userSeeds = [
     phone_number: '+6281110000001',
     email: 'admin@maternin.example.test',
     puskesmas_id: null,
+  },
+  {
+    id: 'f0000000-0000-4000-8000-000000000001', role: UserRole.dokter, full_name: 'dr. Ayu Prameswari, Sp.OG', phone_number: '+6281510000001', email: 'ayu.prameswari@maternin.example.test', puskesmas_id: null,
+  },
+  {
+    id: 'f0000000-0000-4000-8000-000000000002', role: UserRole.dokter, full_name: 'dr. Bima Adinata, Sp.OG', phone_number: '+6281510000002', email: 'bima.adinata@maternin.example.test', puskesmas_id: null,
+  },
+  {
+    id: 'f0000000-0000-4000-8000-000000000003', role: UserRole.dokter, full_name: 'dr. Citra Lestari, Sp.A', phone_number: '+6281510000003', email: 'citra.lestari@maternin.example.test', puskesmas_id: null,
+  },
+  {
+    id: 'f0000000-0000-4000-8000-000000000004', role: UserRole.dokter, full_name: 'dr. Dimas Nugroho, Sp.OG', phone_number: '+6281510000004', email: 'dimas.nugroho@maternin.example.test', puskesmas_id: null,
   },
   {
     id: 'b0000000-0000-4000-8000-000000000001',
@@ -153,6 +166,19 @@ const userSeeds = [
     puskesmas_id: puskesmasSeeds[0].id,
   },
 ] as const;
+
+const doctorSeeds = [
+  { id: 'fa000000-0000-4000-8000-000000000001', user_id: 'f0000000-0000-4000-8000-000000000001', specialization: 'Obstetri dan Ginekologi', str_number: 'STR-OG-1001', price: 85000, bio: 'Berpengalaman mendampingi kehamilan sehat dan persiapan persalinan.', photo_key: 'doctor_1' },
+  { id: 'fa000000-0000-4000-8000-000000000002', user_id: 'f0000000-0000-4000-8000-000000000002', specialization: 'Obstetri dan Ginekologi', str_number: 'STR-OG-1002', price: 100000, bio: 'Fokus pada kehamilan risiko tinggi dan edukasi antenatal.', photo_key: 'doctor_2' },
+  { id: 'fa000000-0000-4000-8000-000000000003', user_id: 'f0000000-0000-4000-8000-000000000003', specialization: 'Kesehatan Anak', str_number: 'STR-A-1003', price: 75000, bio: 'Mendampingi persiapan ibu untuk perawatan bayi baru lahir.', photo_key: 'doctor_3' },
+  { id: 'fa000000-0000-4000-8000-000000000004', user_id: 'f0000000-0000-4000-8000-000000000004', specialization: 'Fetomaternal', str_number: 'STR-OG-1004', price: 125000, bio: 'Fokus pada pemantauan ibu dan janin secara komprehensif.', photo_key: 'doctor_4' },
+] as const;
+const doctorScheduleSeeds = doctorSeeds.flatMap((doctor, doctorIndex) =>
+  ['senin', 'selasa', 'rabu', 'kamis', 'jumat'].map((day, dayIndex) => ({
+    id: `fb00000${doctorIndex + 1}-000${dayIndex}-4000-8000-00000000000${dayIndex + 1}`,
+    doctor_id: doctor.id, day_of_week: day as 'senin', start_time: doctorIndex % 2 ? '13:00' : '08:00', end_time: doctorIndex % 2 ? '17:00' : '12:00',
+  })),
+);
 
 const pregnancyProfileSeeds = [
   {
@@ -267,6 +293,45 @@ const symptomCheckinSeeds = [
 ] as const;
 
 const riskAssessmentSeeds = [
+  {
+    id: '92000000-0000-4000-8000-000000000011',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    symptom_checkin_id: null,
+    triage_score: 25,
+    anemia_probability: 0.12,
+    preeclampsia_probability: 0.18,
+    aggregate_score: 28,
+    risk_badge: RiskBadge.hijau,
+    risk_factors: ['Tekanan darah mulai meningkat'],
+    recommendation_text: 'Lanjutkan pemantauan rutin dan catat tekanan darah.',
+    created_at: new Date('2026-07-06T08:00:00.000Z'),
+  },
+  {
+    id: '92000000-0000-4000-8000-000000000012',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    symptom_checkin_id: null,
+    triage_score: 44,
+    anemia_probability: 0.2,
+    preeclampsia_probability: 0.4,
+    aggregate_score: 47,
+    risk_badge: RiskBadge.kuning,
+    risk_factors: ['Tekanan darah meningkat', 'Bengkak kaki ringan'],
+    recommendation_text: 'Jadwalkan pemeriksaan lanjutan dengan bidan.',
+    created_at: new Date('2026-07-13T08:00:00.000Z'),
+  },
+  {
+    id: '92000000-0000-4000-8000-000000000013',
+    pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
+    symptom_checkin_id: null,
+    triage_score: 65,
+    anemia_probability: 0.24,
+    preeclampsia_probability: 0.68,
+    aggregate_score: 68,
+    risk_badge: RiskBadge.kuning,
+    risk_factors: ['Tekanan darah tinggi', 'Sakit kepala berulang'],
+    recommendation_text: 'Perlu evaluasi klinis lebih cepat di fasilitas kesehatan.',
+    created_at: new Date('2026-07-20T08:00:00.000Z'),
+  },
   {
     id: '92000000-0000-4000-8000-000000000001',
     pregnancy_profile_id: 'e0000000-0000-4000-8000-000000000001',
@@ -476,6 +541,38 @@ const chatMessageSeeds = [
   },
 ] as const;
 
+const educationArticleSeeds = [
+  {
+    id: '96000000-0000-4000-8000-000000000001',
+    title: 'Menjaga Asupan Gizi pada Trimester Pertama',
+    slug: 'asupan-gizi-trimester-pertama',
+    summary: 'Panduan singkat memilih makanan beragam pada awal kehamilan.',
+    content:
+      'Makanlah beragam sumber karbohidrat, protein, sayur, dan buah. Ikuti anjuran tablet tambah darah dari tenaga kesehatan. Bila mual mengganggu asupan, coba porsi kecil lebih sering dan konsultasikan saat pemeriksaan kehamilan.',
+    trimester: EducationTrimester.trimester_1,
+    category: 'gizi',
+    source_name: 'Kementerian Kesehatan RI - Buku KIA',
+    source_url: 'https://kesga.kemkes.go.id/',
+    reviewer: 'Tim Bidan MaternIn',
+    published: true,
+  },
+  {
+    id: '96000000-0000-4000-8000-000000000002',
+    title: 'Tetap Aktif Selama Kehamilan',
+    slug: 'tetap-aktif-selama-kehamilan',
+    summary: 'Aktivitas fisik ringan membantu menjaga kebugaran selama kehamilan.',
+    content:
+      'Lakukan aktivitas ringan seperti berjalan sesuai kemampuan dan anjuran tenaga kesehatan. Hentikan aktivitas bila terasa tidak nyaman. Tanyakan kepada bidan atau dokter sebelum memulai latihan baru, terutama bila memiliki kondisi kesehatan tertentu.',
+    trimester: null,
+    category: 'aktivitas',
+    source_name: 'World Health Organization',
+    source_url:
+      'https://www.who.int/publications/i/item/9789240015128',
+    reviewer: 'Tim Bidan MaternIn',
+    published: true,
+  },
+] as const;
+
 async function main() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Seed data dummy tidak boleh dijalankan di production');
@@ -522,6 +619,13 @@ async function main() {
         }),
       ),
     );
+
+    await prisma.$transaction(doctorSeeds.map(({ id, ...data }) =>
+      prisma.doctor.upsert({ where: { id }, update: data, create: { id, ...data } }),
+    ));
+    await prisma.$transaction(doctorScheduleSeeds.map(({ id, ...data }) =>
+      prisma.doctorSchedule.upsert({ where: { id }, update: data, create: { id, ...data } }),
+    ));
 
     await prisma.$transaction(
       ancRecordSeeds.map(({ id, ...data }) =>
@@ -616,6 +720,16 @@ async function main() {
       });
     }
 
+    await prisma.$transaction(
+      educationArticleSeeds.map(({ id, ...data }) =>
+        prisma.educationArticle.upsert({
+          where: { slug: data.slug },
+          update: data,
+          create: { id, ...data },
+        }),
+      ),
+    );
+
     const [
       puskesmasCount,
       userCount,
@@ -629,6 +743,7 @@ async function main() {
       notificationLogCount,
       consultationCount,
       chatMessageCount,
+      educationArticleCount,
     ] = await Promise.all([
       prisma.puskesmas.count({
         where: { id: { in: puskesmasSeeds.map(({ id }) => id) } },
@@ -675,10 +790,13 @@ async function main() {
       prisma.chatMessage.count({
         where: { id: { in: chatMessageSeeds.map(({ id }) => id) } },
       }),
+      prisma.educationArticle.count({
+        where: { slug: { in: educationArticleSeeds.map(({ slug }) => slug) } },
+      }),
     ]);
 
     console.log(
-      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan, ${ancRecordCount} catatan ANC, ${symptomCheckinCount} symptom check-in, ${riskAssessmentCount} risk assessment, ${postpartumLogCount} log postpartum, ${familyCircleCount} kontak keluarga, ${reminderCount} reminder, ${notificationLogCount} log notifikasi, ${consultationCount} konsultasi, ${chatMessageCount} pesan chat.`,
+      `Seed selesai: ${puskesmasCount} puskesmas, ${userCount} pengguna, ${pregnancyProfileCount} profil kehamilan, ${ancRecordCount} catatan ANC, ${symptomCheckinCount} symptom check-in, ${riskAssessmentCount} risk assessment, ${postpartumLogCount} log postpartum, ${familyCircleCount} kontak keluarga, ${reminderCount} reminder, ${notificationLogCount} log notifikasi, ${consultationCount} konsultasi, ${chatMessageCount} pesan chat, ${educationArticleCount} artikel edukasi.`,
     );
     console.log(`Password seluruh akun dummy: ${SEED_PASSWORD}`);
     console.table(

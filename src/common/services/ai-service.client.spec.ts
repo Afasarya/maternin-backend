@@ -351,7 +351,12 @@ describe('AiServiceClient', () => {
 
       await expect(invoke()).resolves.toEqual(
         path === '/api/v1/nutrition/parse'
-          ? { ...(responseByPath[path] as object), parsed_items: [], nutrition_per_item: [], insight_text: null }
+          ? {
+              ...(responseByPath[path] as object),
+              parsed_items: [],
+              nutrition_per_item: [],
+              insight_text: null,
+            }
           : responseByPath[path],
       );
       expect(httpService.post).toHaveBeenCalledWith(
@@ -373,15 +378,24 @@ describe('AiServiceClient', () => {
   });
 
   it('normalizes the deployed P2 nutrition response without inventing nutrient values', async () => {
-    httpService.post.mockReturnValue(of({ data: {
-      parsed_items: [{ name: 'nasi', portion_estimate: '1 piring' }],
-      insight_text: 'Estimasi kasar.',
-    } }));
+    httpService.post.mockReturnValue(
+      of({
+        data: {
+          parsed_items: [{ name: 'nasi', portion_estimate: '1 piring' }],
+          insight_text: 'Estimasi kasar.',
+        },
+      }),
+    );
 
-    await expect(service.parseNutrition({
-      pregnancy_profile_id: payload.pregnancy_profile_id,
-      raw_message: 'makan nasi satu piring',
-    }, 'request-p2')).resolves.toEqual({
+    await expect(
+      service.parseNutrition(
+        {
+          pregnancy_profile_id: payload.pregnancy_profile_id,
+          raw_message: 'makan nasi satu piring',
+        },
+        'request-p2',
+      ),
+    ).resolves.toEqual({
       calories: null,
       iron_mg: null,
       activity: null,
@@ -401,76 +415,179 @@ describe('AiServiceClient', () => {
   });
 
   it('aggregates calories and iron from validated AI nutrition-per-item data', async () => {
-    httpService.post.mockReturnValue(of({ data: {
-      parsed_items: [
-        { name: 'nasi goreng', portion_estimate: '1 piring' },
-        { name: 'telur ceplok', portion_estimate: '1 butir' },
-      ],
-      nutrition_per_item: [
-        { name: 'nasi goreng', portion_estimate: '1 piring', source: 'tkpi_dataset', matched_as: 'Nasi Putih', nutrition: { energi_kcal: 130, protein_g: 2.4, lemak_g: 0.2, karbohidrat_g: 28.6, zat_besi_mg: 0.2, kalsium_mg: 25, kategori: 'Makanan Pokok', catatan_ibu_hamil: 'Aman' } },
-        { name: 'telur ceplok', portion_estimate: '1 butir', source: 'tkpi_dataset', matched_as: 'Telur Ayam Rebus', nutrition: { energi_kcal: 77, protein_g: 6.3, lemak_g: 5.3, karbohidrat_g: 0.6, zat_besi_mg: 1.2, kalsium_mg: 25, kategori: 'Lauk Pauk', catatan_ibu_hamil: null } },
-      ],
-      insight_text: 'Estimasi asupan.',
-    } }));
+    httpService.post.mockReturnValue(
+      of({
+        data: {
+          parsed_items: [
+            { name: 'nasi goreng', portion_estimate: '1 piring' },
+            { name: 'telur ceplok', portion_estimate: '1 butir' },
+          ],
+          nutrition_per_item: [
+            {
+              name: 'nasi goreng',
+              portion_estimate: '1 piring',
+              source: 'tkpi_dataset',
+              matched_as: 'Nasi Putih',
+              nutrition: {
+                energi_kcal: 130,
+                protein_g: 2.4,
+                lemak_g: 0.2,
+                karbohidrat_g: 28.6,
+                zat_besi_mg: 0.2,
+                kalsium_mg: 25,
+                kategori: 'Makanan Pokok',
+                catatan_ibu_hamil: 'Aman',
+              },
+            },
+            {
+              name: 'telur ceplok',
+              portion_estimate: '1 butir',
+              source: 'tkpi_dataset',
+              matched_as: 'Telur Ayam Rebus',
+              nutrition: {
+                energi_kcal: 77,
+                protein_g: 6.3,
+                lemak_g: 5.3,
+                karbohidrat_g: 0.6,
+                zat_besi_mg: 1.2,
+                kalsium_mg: 25,
+                kategori: 'Lauk Pauk',
+                catatan_ibu_hamil: null,
+              },
+            },
+          ],
+          insight_text: 'Estimasi asupan.',
+        },
+      }),
+    );
 
-    await expect(service.parseNutrition({
-      pregnancy_profile_id: payload.pregnancy_profile_id,
-      raw_message: 'nasi goreng dan telur',
-    }, 'request-detailed')).resolves.toEqual(expect.objectContaining({
-      calories: 207,
-      iron_mg: 1.4,
-      confidence_score: 0.9,
-      nutrition_per_item: expect.arrayContaining([
-        expect.objectContaining({ name: 'nasi goreng' }),
-        expect.objectContaining({ name: 'telur ceplok' }),
-      ]),
-    }));
+    await expect(
+      service.parseNutrition(
+        {
+          pregnancy_profile_id: payload.pregnancy_profile_id,
+          raw_message: 'nasi goreng dan telur',
+        },
+        'request-detailed',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        calories: 207,
+        iron_mg: 1.4,
+        confidence_score: 0.9,
+        nutrition_per_item: expect.arrayContaining([
+          expect.objectContaining({ name: 'nasi goreng' }),
+          expect.objectContaining({ name: 'telur ceplok' }),
+        ]),
+      }),
+    );
   });
 
   it('keeps valid TKPI items when another nutrition item is malformed', async () => {
-    httpService.post.mockReturnValue(of({ data: {
-      parsed_items: [
-        { name: 'nasi putih', portion_estimate: '1 piring' },
-        { name: 'makanan asing', portion_estimate: '1 porsi' },
-      ],
-      nutrition_per_item: [
-        { name: 'nasi putih', portion_estimate: '1 piring', source: 'tkpi_dataset', matched_as: 'Nasi Putih', nutrition: { energi_kcal: 130, protein_g: 2.4, lemak_g: 0.2, karbohidrat_g: 28.6, zat_besi_mg: 0.2, kalsium_mg: 25, kategori: 'Makanan Pokok', catatan_ibu_hamil: null } },
-        { name: 'makanan asing', portion_estimate: '1 porsi', source: 'unmatched', matched_as: '', nutrition: null },
-      ],
-      insight_text: 'Estimasi sebagian.',
-    } }));
+    httpService.post.mockReturnValue(
+      of({
+        data: {
+          parsed_items: [
+            { name: 'nasi putih', portion_estimate: '1 piring' },
+            { name: 'makanan asing', portion_estimate: '1 porsi' },
+          ],
+          nutrition_per_item: [
+            {
+              name: 'nasi putih',
+              portion_estimate: '1 piring',
+              source: 'tkpi_dataset',
+              matched_as: 'Nasi Putih',
+              nutrition: {
+                energi_kcal: 130,
+                protein_g: 2.4,
+                lemak_g: 0.2,
+                karbohidrat_g: 28.6,
+                zat_besi_mg: 0.2,
+                kalsium_mg: 25,
+                kategori: 'Makanan Pokok',
+                catatan_ibu_hamil: null,
+              },
+            },
+            {
+              name: 'makanan asing',
+              portion_estimate: '1 porsi',
+              source: 'unmatched',
+              matched_as: '',
+              nutrition: null,
+            },
+          ],
+          insight_text: 'Estimasi sebagian.',
+        },
+      }),
+    );
 
-    await expect(service.parseNutrition({
-      pregnancy_profile_id: payload.pregnancy_profile_id,
-      raw_message: 'nasi putih dan makanan asing',
-    }, 'request-partial')).resolves.toEqual(expect.objectContaining({
-      calories: 130,
-      iron_mg: 0.2,
-      nutrition_per_item: [expect.objectContaining({ name: 'nasi putih' })],
-    }));
+    await expect(
+      service.parseNutrition(
+        {
+          pregnancy_profile_id: payload.pregnancy_profile_id,
+          raw_message: 'nasi putih dan makanan asing',
+        },
+        'request-partial',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        calories: 130,
+        iron_mg: 0.2,
+        nutrition_per_item: [expect.objectContaining({ name: 'nasi putih' })],
+      }),
+    );
   });
 
   it('multiplies TKPI nutrition when portion estimate is five portions', async () => {
-    httpService.post.mockReturnValue(of({ data: {
-      parsed_items: [{ name: 'nasi putih', portion_estimate: '5 porsi' }],
-      nutrition_per_item: [{
-        name: 'nasi putih', portion_estimate: '5 porsi', source: 'tkpi_dataset', matched_as: 'Nasi Putih',
-        nutrition: { energi_kcal: 130, protein_g: 2.4, lemak_g: 0.2, karbohidrat_g: 28.6, zat_besi_mg: 0.2, kalsium_mg: 25, kategori: 'Makanan Pokok', catatan_ibu_hamil: null },
-      }],
-      insight_text: 'Estimasi lima porsi.',
-    } }));
+    httpService.post.mockReturnValue(
+      of({
+        data: {
+          parsed_items: [{ name: 'nasi putih', portion_estimate: '5 porsi' }],
+          nutrition_per_item: [
+            {
+              name: 'nasi putih',
+              portion_estimate: '5 porsi',
+              source: 'tkpi_dataset',
+              matched_as: 'Nasi Putih',
+              nutrition: {
+                energi_kcal: 130,
+                protein_g: 2.4,
+                lemak_g: 0.2,
+                karbohidrat_g: 28.6,
+                zat_besi_mg: 0.2,
+                kalsium_mg: 25,
+                kategori: 'Makanan Pokok',
+                catatan_ibu_hamil: null,
+              },
+            },
+          ],
+          insight_text: 'Estimasi lima porsi.',
+        },
+      }),
+    );
 
-    await expect(service.parseNutrition({
-      pregnancy_profile_id: payload.pregnancy_profile_id,
-      raw_message: 'makan nasi putih 5 porsi',
-    }, 'request-five-portions')).resolves.toEqual(expect.objectContaining({
-      calories: 650,
-      iron_mg: 1,
-      nutrition_per_item: [expect.objectContaining({
-        portion_multiplier: 5,
-        nutrition: expect.objectContaining({ protein_g: 12, kalsium_mg: 125 }),
-      })],
-    }));
+    await expect(
+      service.parseNutrition(
+        {
+          pregnancy_profile_id: payload.pregnancy_profile_id,
+          raw_message: 'makan nasi putih 5 porsi',
+        },
+        'request-five-portions',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        calories: 650,
+        iron_mg: 1,
+        nutrition_per_item: [
+          expect.objectContaining({
+            portion_multiplier: 5,
+            nutrition: expect.objectContaining({
+              protein_g: 12,
+              kalsium_mg: 125,
+            }),
+          }),
+        ],
+      }),
+    );
   });
 
   it.each([

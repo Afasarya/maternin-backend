@@ -322,10 +322,16 @@ export class AiServiceClient {
     requestId: string,
   ): Promise<NutritionTrendResponse> {
     const data = await this.post<unknown>(
-      '/api/v1/nutrition/evaluate-trend', payload, requestId, undefined, 15_000,
+      '/api/v1/nutrition/evaluate-trend',
+      payload,
+      requestId,
+      undefined,
+      15_000,
     );
     if (!this.isNutritionTrendResponse(data))
-      throw new AiServiceUnavailableException('Respons tren nutrisi AI Service tidak valid');
+      throw new AiServiceUnavailableException(
+        'Respons tren nutrisi AI Service tidak valid',
+      );
     return data;
   }
 
@@ -560,8 +566,10 @@ export class AiServiceClient {
     if (typeof value !== 'object' || value === null) return false;
     const response = value as Record<string, unknown>;
     return (
-      (response.calories === null || this.isNumberInRange(response.calories, 0, 9999.99)) &&
-      (response.iron_mg === null || this.isNumberInRange(response.iron_mg, 0, 9999.99)) &&
+      (response.calories === null ||
+        this.isNumberInRange(response.calories, 0, 9999.99)) &&
+      (response.iron_mg === null ||
+        this.isNumberInRange(response.iron_mg, 0, 9999.99)) &&
       (response.activity === null || typeof response.activity === 'string') &&
       this.isNumberInRange(response.confidence_score, 0, 1)
     );
@@ -569,32 +577,65 @@ export class AiServiceClient {
 
   private normalizeNutritionResponse(value: unknown): NutritionResponse | null {
     if (this.isNutritionResponse(value)) {
-      return { ...value, parsed_items: value.parsed_items ?? [], nutrition_per_item: value.nutrition_per_item ?? [], insight_text: value.insight_text ?? null };
+      return {
+        ...value,
+        parsed_items: value.parsed_items ?? [],
+        nutrition_per_item: value.nutrition_per_item ?? [],
+        insight_text: value.insight_text ?? null,
+      };
     }
     if (typeof value !== 'object' || value === null) return null;
     const response = value as Record<string, unknown>;
-    if (!Array.isArray(response.parsed_items) ||
-      !response.parsed_items.every((item) => typeof item === 'object' && item !== null &&
-        typeof (item as Record<string, unknown>).name === 'string' &&
-        typeof (item as Record<string, unknown>).portion_estimate === 'string') ||
-      typeof response.insight_text !== 'string') return null;
+    if (
+      !Array.isArray(response.parsed_items) ||
+      !response.parsed_items.every(
+        (item) =>
+          typeof item === 'object' &&
+          item !== null &&
+          typeof (item as Record<string, unknown>).name === 'string' &&
+          typeof (item as Record<string, unknown>).portion_estimate ===
+            'string',
+      ) ||
+      typeof response.insight_text !== 'string'
+    )
+      return null;
 
-    const nutritionPerItem = this.parseNutritionPerItem(response.nutrition_per_item);
-    const calories = nutritionPerItem.length > 0
-      ? this.roundNutritionTotal(nutritionPerItem.reduce((total, item) => total + item.nutrition.energi_kcal, 0))
-      : null;
-    const ironMg = nutritionPerItem.length > 0
-      ? this.roundNutritionTotal(nutritionPerItem.reduce((total, item) => total + item.nutrition.zat_besi_mg, 0))
-      : null;
+    const nutritionPerItem = this.parseNutritionPerItem(
+      response.nutrition_per_item,
+    );
+    const calories =
+      nutritionPerItem.length > 0
+        ? this.roundNutritionTotal(
+            nutritionPerItem.reduce(
+              (total, item) => total + item.nutrition.energi_kcal,
+              0,
+            ),
+          )
+        : null;
+    const ironMg =
+      nutritionPerItem.length > 0
+        ? this.roundNutritionTotal(
+            nutritionPerItem.reduce(
+              (total, item) => total + item.nutrition.zat_besi_mg,
+              0,
+            ),
+          )
+        : null;
 
     return {
       calories,
       iron_mg: ironMg,
       activity: null,
-      confidence_score: nutritionPerItem.length > 0
-        ? 0.9
-        : response.parsed_items.length > 0 ? 0.8 : 0.3,
-      parsed_items: response.parsed_items as Array<{ name: string; portion_estimate: string }>,
+      confidence_score:
+        nutritionPerItem.length > 0
+          ? 0.9
+          : response.parsed_items.length > 0
+            ? 0.8
+            : 0.3,
+      parsed_items: response.parsed_items as Array<{
+        name: string;
+        portion_estimate: string;
+      }>,
       nutrition_per_item: nutritionPerItem,
       insight_text: response.insight_text,
     };
@@ -605,16 +646,29 @@ export class AiServiceClient {
     const validItems = value.filter((item): item is NutritionPerItem => {
       if (typeof item !== 'object' || item === null) return false;
       const candidate = item as Record<string, unknown>;
-      if (typeof candidate.nutrition !== 'object' || candidate.nutrition === null) return false;
+      if (
+        typeof candidate.nutrition !== 'object' ||
+        candidate.nutrition === null
+      )
+        return false;
       const nutrition = candidate.nutrition as Record<string, unknown>;
-      return typeof candidate.name === 'string' &&
+      return (
+        typeof candidate.name === 'string' &&
         typeof candidate.portion_estimate === 'string' &&
         typeof candidate.source === 'string' &&
         typeof candidate.matched_as === 'string' &&
-        ['energi_kcal', 'protein_g', 'lemak_g', 'karbohidrat_g', 'zat_besi_mg', 'kalsium_mg']
-          .every((key) => this.isNumberInRange(nutrition[key], 0, 99999)) &&
+        [
+          'energi_kcal',
+          'protein_g',
+          'lemak_g',
+          'karbohidrat_g',
+          'zat_besi_mg',
+          'kalsium_mg',
+        ].every((key) => this.isNumberInRange(nutrition[key], 0, 99999)) &&
         typeof nutrition.kategori === 'string' &&
-        (nutrition.catatan_ibu_hamil === null || typeof nutrition.catatan_ibu_hamil === 'string');
+        (nutrition.catatan_ibu_hamil === null ||
+          typeof nutrition.catatan_ibu_hamil === 'string')
+      );
     });
     // Pertahankan item TKPI yang valid meski AI menyertakan item lain yang
     // belum match atau detailnya tidak lengkap. Satu item buruk tidak boleh
@@ -626,12 +680,24 @@ export class AiServiceClient {
         portion_multiplier: multiplier,
         nutrition: {
           ...item.nutrition,
-          energi_kcal: this.roundNutritionTotal(item.nutrition.energi_kcal * multiplier),
-          protein_g: this.roundNutritionTotal(item.nutrition.protein_g * multiplier),
-          lemak_g: this.roundNutritionTotal(item.nutrition.lemak_g * multiplier),
-          karbohidrat_g: this.roundNutritionTotal(item.nutrition.karbohidrat_g * multiplier),
-          zat_besi_mg: this.roundNutritionTotal(item.nutrition.zat_besi_mg * multiplier),
-          kalsium_mg: this.roundNutritionTotal(item.nutrition.kalsium_mg * multiplier),
+          energi_kcal: this.roundNutritionTotal(
+            item.nutrition.energi_kcal * multiplier,
+          ),
+          protein_g: this.roundNutritionTotal(
+            item.nutrition.protein_g * multiplier,
+          ),
+          lemak_g: this.roundNutritionTotal(
+            item.nutrition.lemak_g * multiplier,
+          ),
+          karbohidrat_g: this.roundNutritionTotal(
+            item.nutrition.karbohidrat_g * multiplier,
+          ),
+          zat_besi_mg: this.roundNutritionTotal(
+            item.nutrition.zat_besi_mg * multiplier,
+          ),
+          kalsium_mg: this.roundNutritionTotal(
+            item.nutrition.kalsium_mg * multiplier,
+          ),
         },
       };
     });
@@ -655,10 +721,15 @@ export class AiServiceClient {
     return Math.round(value * 100) / 100;
   }
 
-  private isNutritionTrendResponse(value: unknown): value is NutritionTrendResponse {
+  private isNutritionTrendResponse(
+    value: unknown,
+  ): value is NutritionTrendResponse {
     if (typeof value !== 'object' || value === null) return false;
     const response = value as Record<string, unknown>;
-    return typeof response.anomaly_detected === 'boolean' && typeof response.reason === 'string';
+    return (
+      typeof response.anomaly_detected === 'boolean' &&
+      typeof response.reason === 'string'
+    );
   }
 
   private isOptionalNumberInRange(

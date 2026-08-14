@@ -42,7 +42,7 @@ export class PregnancyProfilesController {
   }
 
   @Get()
-  @Roles('ibu_hamil', 'bidan', 'admin')
+  @Roles('ibu_hamil', 'bidan', 'kader', 'admin')
   findAll(
     @CurrentUser() requester: CurrentUserData,
     @Query() query: QueryPregnancyProfilesDto,
@@ -56,7 +56,7 @@ export class PregnancyProfilesController {
   }
 
   @Get(':id')
-  @Roles('ibu_hamil', 'bidan', 'admin')
+  @Roles('ibu_hamil', 'bidan', 'kader', 'admin')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() requester: CurrentUserData,

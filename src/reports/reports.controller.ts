@@ -23,12 +23,19 @@ export class ReportsController {
   }
 
   @Get('monthly/export')
-  async exportMonthly(@CurrentUser() requester: CurrentUserData, @Query() query: ReportQueryDto, @Res() response: Response) {
+  async exportMonthly(
+    @CurrentUser() requester: CurrentUserData,
+    @Query() query: ReportQueryDto,
+    @Res() response: Response,
+  ) {
     const csv = await this.reportsService.exportMonthlyCsv(requester, query);
     const month = query.month ?? new Date().getUTCMonth() + 1;
     const year = query.year ?? new Date().getUTCFullYear();
     response.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    response.setHeader('Content-Disposition', `attachment; filename="maternin-report-${year}-${String(month).padStart(2, '0')}.csv"`);
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="maternin-report-${year}-${String(month).padStart(2, '0')}.csv"`,
+    );
     response.send(csv);
   }
 }

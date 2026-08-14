@@ -43,6 +43,8 @@ export class ConsultationsService {
       pregnancy_profile_id: string;
       doctor_id: string;
       scheduled_at: string;
+      topic: string;
+      complaint: string;
     },
     user: CurrentUserData,
   ) {
@@ -86,10 +88,15 @@ export class ConsultationsService {
             : scheduled.getUTCDay(),
         )
       ];
+    const minute = Number(hhmm.slice(3, 5));
+    if ((minute !== 0 && minute !== 30) || scheduled.getUTCSeconds() !== 0 || scheduled.getUTCMilliseconds() !== 0)
+      throw new BadRequestException('Slot harus menggunakan interval 30 menit');
     if (
       !doctor.schedules.some(
         (s) =>
-          s.day_of_week === dow && s.start_time <= hhmm && s.end_time > hhmm,
+          s.day_of_week === dow &&
+          s.start_time <= hhmm &&
+          this.addMinutes(hhmm, 30) <= s.end_time,
       )
     )
       throw new BadRequestException('Jadwal di luar ketersediaan dokter');
@@ -97,22 +104,24 @@ export class ConsultationsService {
       where: {
         doctor_id: dto.doctor_id,
         scheduled_at: scheduled,
-        status: {
-          notIn: [ConsultationStatus.CANCELLED, ConsultationStatus.EXPIRED],
-        },
+        status: { in: [ConsultationStatus.PENDING_PAYMENT, ConsultationStatus.SCHEDULED, ConsultationStatus.ONGOING] },
       },
     });
     if (clash) throw new ConflictException('Slot konsultasi sudah dibooking');
+    const doctorPrice = new Prisma.Decimal(doctor.price);
     const fee = new Prisma.Decimal(
       this.config.getOrThrow<string>('CONSULTATION_PLATFORM_FEE'),
     );
-    const total = doctor.price.add(fee);
+    const total = doctorPrice.add(fee);
     const consultation = await this.prisma.consultation.create({
       data: {
         pregnancy_profile_id: dto.pregnancy_profile_id,
         doctor_id: dto.doctor_id,
         scheduled_at: scheduled,
-        price_snapshot: doctor.price,
+        topic: dto.topic,
+        complaint: dto.complaint,
+        duration_minutes: 30,
+        price_snapshot: doctorPrice,
         platform_fee: fee,
       },
     });
@@ -130,19 +139,17 @@ export class ConsultationsService {
           { auth: { username: key, password: '' } },
         ),
       );
-      const invoice = response.data as { id: string; invoice_url: string };
-      await this.prisma.payment.create({
+      const invoice = response.data as { id: string; invoice_url: string; expiry_date?: string };
+      const payment = await this.prisma.payment.create({
         data: {
           consultation_id: consultation.id,
           xendit_invoice_id: invoice.id,
           amount: total,
+          payment_url: invoice.invoice_url,
+          expires_at: invoice.expiry_date ? new Date(invoice.expiry_date) : new Date(Date.now() + 3600000),
         },
       });
-      return {
-        ...consultation,
-        payment_url: invoice.invoice_url,
-        total_amount: total,
-      };
+      return this.serializeConsultation({ ...consultation, payment, total_amount: total });
     } catch (error) {
       await this.prisma.consultation.delete({ where: { id: consultation.id } });
       throw new BadRequestException('Gagal membuat invoice pembayaran', {
@@ -161,10 +168,10 @@ export class ConsultationsService {
       },
       include: {
         doctor: { include: { user: { select: { full_name: true } } } },
-        payment: true,
+        payment: { select: { id: true, amount: true, status: true, payment_url: true, expires_at: true, paid_at: true, created_at: true } },
       },
       orderBy: { created_at: 'desc' },
-    });
+    }).then((rows) => rows.map((row) => this.serializeConsultation(row)));
   }
   async listDoctor(
     user: CurrentUserData,
@@ -204,28 +211,82 @@ export class ConsultationsService {
       offset: query.offset,
     };
   }
-  async listAdmin(query: { status?: ConsultationStatus; doctor_id?: string; payment_status?: string; date_from?: string; date_to?: string; search?: string; limit: number; offset: number }) {
-    const where: Prisma.ConsultationWhereInput = { ...(query.status && { status: query.status }), ...(query.doctor_id && { doctor_id: query.doctor_id }), ...(query.payment_status && { payment: { status: query.payment_status as never } }), ...this.dateScope(query), ...(query.search && { OR: [{ doctor: { user: { full_name: { contains: query.search, mode: 'insensitive' } } } }, { pregnancy_profile: { user: { full_name: { contains: query.search, mode: 'insensitive' } } } }] }) };
-    const [rows, total] = await this.prisma.$transaction([this.prisma.consultation.findMany({
-      where,
-      include: {
-        doctor: { include: { user: { select: { full_name: true } } } },
-        pregnancy_profile: { select: { user: { select: { full_name: true } } } },
-        payment: true,
-      },
-      orderBy: { created_at: 'desc' },
-      skip: query.offset, take: query.limit,
-    }), this.prisma.consultation.count({ where })]);
-    return { data: rows.map((row) => this.serializeConsultation(row)), total, limit: query.limit, offset: query.offset };
+  async listAdmin(query: {
+    status?: ConsultationStatus;
+    doctor_id?: string;
+    payment_status?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+    limit: number;
+    offset: number;
+  }) {
+    const where: Prisma.ConsultationWhereInput = {
+      ...(query.status && { status: query.status }),
+      ...(query.doctor_id && { doctor_id: query.doctor_id }),
+      ...(query.payment_status && {
+        payment: { status: query.payment_status as never },
+      }),
+      ...this.dateScope(query),
+      ...(query.search && {
+        OR: [
+          {
+            doctor: {
+              user: {
+                full_name: { contains: query.search, mode: 'insensitive' },
+              },
+            },
+          },
+          {
+            pregnancy_profile: {
+              user: {
+                full_name: { contains: query.search, mode: 'insensitive' },
+              },
+            },
+          },
+        ],
+      }),
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.consultation.findMany({
+        where,
+        include: {
+          doctor: { include: { user: { select: { full_name: true } } } },
+          pregnancy_profile: {
+            select: { user: { select: { full_name: true } } },
+          },
+          payment: { select: { id: true, amount: true, status: true, payment_url: true, expires_at: true, paid_at: true, created_at: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        skip: query.offset,
+        take: query.limit,
+      }),
+      this.prisma.consultation.count({ where }),
+    ]);
+    return {
+      data: rows.map((row) => this.serializeConsultation(row)),
+      total,
+      limit: query.limit,
+      offset: query.offset,
+    };
   }
   async adminDetail(id: string) {
-    const row = await this.prisma.consultation.findUnique({ where: { id }, include: { doctor: { include: { user: { select: { full_name: true } } } }, pregnancy_profile: { select: { user: { select: { full_name: true } } } }, payment: true } });
+    const row = await this.prisma.consultation.findUnique({
+      where: { id },
+      include: {
+        doctor: { include: { user: { select: { full_name: true } } } },
+        pregnancy_profile: {
+          select: { user: { select: { full_name: true } } },
+        },
+        payment: { select: { id: true, amount: true, status: true, payment_url: true, expires_at: true, paid_at: true, created_at: true } },
+      },
+    });
     if (!row) throw new NotFoundException('Konsultasi tidak ditemukan');
     return this.serializeConsultation(row);
   }
   async detail(id: string, user: CurrentUserData) {
     const c = await this.getAuthorized(id, user);
-    return user.role === UserRole.DOKTER
+    const result = user.role === UserRole.DOKTER
       ? {
           ...c,
           medical_summary: await this.bidan.getVisitBrief(
@@ -234,6 +295,94 @@ export class ConsultationsService {
           ),
         }
       : c;
+    return this.serializeConsultation(result);
+  }
+  async paymentStatus(id: string, user: CurrentUserData) {
+    let c = await this.getAuthorized(id, user);
+    let payment = c.payment;
+    if (payment?.status === 'pending') {
+      const internalPayment = await this.prisma.payment.findUnique({
+        where: { consultation_id: c.id },
+      });
+      if (internalPayment) await this.syncPendingPayment(internalPayment);
+      c = await this.getAuthorized(id, user);
+      payment = c.payment;
+    }
+    return {
+      consultation_id: c.id,
+      consultation_status: c.status,
+      payment: payment ? {
+        status: payment.status,
+        amount: payment.amount.toString(),
+        payment_url: payment.payment_url,
+        expires_at: payment.expires_at,
+        paid_at: payment.paid_at,
+      } : null,
+    };
+  }
+
+  private async syncPendingPayment(payment: {
+    id: string;
+    consultation_id: string;
+    xendit_invoice_id: string;
+    amount: Prisma.Decimal;
+    status: string;
+  }) {
+    try {
+      const key = this.config.getOrThrow<string>('XENDIT_SECRET_KEY');
+      const response = await firstValueFrom(
+        this.http.get(
+          `https://api.xendit.co/v2/invoices/${payment.xendit_invoice_id}`,
+          { auth: { username: key, password: '' } },
+        ),
+      );
+      const invoice = response.data as {
+        status?: string;
+        amount?: number;
+        paid_at?: string;
+      };
+      const status = invoice.status?.toUpperCase();
+      if (invoice.amount !== undefined && invoice.amount !== payment.amount.toNumber())
+        return;
+      const paymentStatus =
+        status === 'PAID' || status === 'SETTLED'
+          ? 'paid'
+          : status === 'EXPIRED'
+            ? 'expired'
+            : status === 'FAILED'
+              ? 'failed'
+              : 'pending';
+      if (paymentStatus === 'pending') return;
+      await this.prisma.$transaction([
+        this.prisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: paymentStatus,
+            paid_at:
+              paymentStatus === 'paid'
+                ? invoice.paid_at
+                  ? new Date(invoice.paid_at)
+                  : new Date()
+                : undefined,
+            xendit_payload: invoice as Prisma.InputJsonValue,
+          },
+        }),
+        this.prisma.consultation.update({
+          where: { id: payment.consultation_id },
+          data: {
+            status:
+              paymentStatus === 'paid'
+                ? 'scheduled'
+                : paymentStatus === 'expired'
+                  ? 'expired'
+                  : undefined,
+          },
+        }),
+      ]);
+    } catch {
+      // Webhook tetap menjadi jalur utama. Kegagalan sinkronisasi provider
+      // tidak boleh membuat endpoint status gagal.
+    }
   }
   async cancel(id: string, user: CurrentUserData) {
     const c = await this.getAuthorized(id, user);
@@ -306,7 +455,11 @@ export class ConsultationsService {
   private async getAuthorized(id: string, user: CurrentUserData) {
     const c = await this.prisma.consultation.findUnique({
       where: { id },
-      include: { pregnancy_profile: true, doctor: true, payment: true },
+      include: {
+        pregnancy_profile: true,
+        doctor: true,
+        payment: { select: { id: true, amount: true, status: true, payment_url: true, expires_at: true, paid_at: true, created_at: true } },
+      },
     });
     if (!c) throw new NotFoundException('Konsultasi tidak ditemukan');
     const allowed =
@@ -318,8 +471,18 @@ export class ConsultationsService {
       throw new ForbiddenException('Tidak memiliki akses ke konsultasi');
     return c;
   }
-  private dateScope(query: { date_from?: string; date_to?: string }): Prisma.ConsultationWhereInput {
-    return query.date_from || query.date_to ? { scheduled_at: { ...(query.date_from && { gte: new Date(query.date_from) }), ...(query.date_to && { lte: new Date(query.date_to) }) } } : {};
+  private dateScope(query: {
+    date_from?: string;
+    date_to?: string;
+  }): Prisma.ConsultationWhereInput {
+    return query.date_from || query.date_to
+      ? {
+          scheduled_at: {
+            ...(query.date_from && { gte: new Date(query.date_from) }),
+            ...(query.date_to && { lte: new Date(query.date_to) }),
+          },
+        }
+      : {};
   }
 
   private serializeConsultation<T extends Record<string, unknown>>(row: T) {
@@ -341,6 +504,11 @@ export class ConsultationsService {
           ...(payment.amount && { amount: payment.amount.toString() }),
         },
       }),
+      ...(row.total_amount !== undefined ? { total_amount: String(row.total_amount) } : {}),
     };
+  }
+  private addMinutes(time: string, minutes: number) {
+    const total = Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)) + minutes;
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
   }
 }

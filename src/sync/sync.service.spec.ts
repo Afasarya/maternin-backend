@@ -51,6 +51,7 @@ describe('SyncService', () => {
       synced_at: Date | null;
       status: SyncStatus;
       client_uuid: string;
+      submitted_by_id: string;
     }> = {},
   ) => ({
     id: '55555555-5555-4555-8555-555555555555',
@@ -61,6 +62,7 @@ describe('SyncService', () => {
     synced_at: null,
     status: SyncStatus.PENDING,
     client_uuid: clientUuid,
+    submitted_by_id: requester.id,
     ...overrides,
   });
   const prisma = {
@@ -150,6 +152,12 @@ describe('SyncService', () => {
       { replaceExisting: false },
     );
     expect(prisma.syncQueue.updateMany).toHaveBeenCalledTimes(3);
+    expect(prisma.syncQueue.create).toHaveBeenNthCalledWith(1, {
+      data: expect.objectContaining({
+        client_uuid: records[0].client_uuid,
+        submitted_by_id: requester.id,
+      }),
+    });
   });
 
   it('processes a mixed ANC and symptom batch through existing pipelines', async () => {
@@ -607,6 +615,51 @@ describe('SyncService', () => {
     expect(prisma.syncQueue.updateMany).not.toHaveBeenCalled();
   });
 
+  it('rejects reuse of client_uuid owned by another user without mutation', async () => {
+    prisma.syncQueue.findUnique.mockResolvedValue(
+      makeQueueRecord({
+        submitted_by_id: '88888888-8888-4888-8888-888888888888',
+      }),
+    );
+
+    await expect(
+      service.processBatch(
+        {
+          device_uuid: deviceUuid,
+          records: [
+            {
+              client_uuid: clientUuid,
+              payload_type: SyncPayloadType.ANC_RECORD,
+              payload: ancPayload,
+              client_created_at: '2026-07-20T10:00:00.000Z',
+            },
+          ],
+        },
+        requester,
+        requestId,
+      ),
+    ).resolves.toEqual({
+      created: false,
+      data: {
+        total_received: 1,
+        processed: 0,
+        skipped: 0,
+        failed: 1,
+        results: [
+          {
+            client_uuid: clientUuid,
+            status: 'failed',
+            reason: 'client_uuid dimiliki pengguna lain',
+          },
+        ],
+      },
+    });
+
+    expect(prisma.syncQueue.create).not.toHaveBeenCalled();
+    expect(prisma.syncQueue.updateMany).not.toHaveBeenCalled();
+    expect(ancRecordsService.create).not.toHaveBeenCalled();
+  });
+
   it('returns aggregate and latest status for one device', async () => {
     prisma.syncQueue.groupBy.mockResolvedValue([
       { status: SyncStatus.PROCESSED, _count: { _all: 3 } },
@@ -621,7 +674,9 @@ describe('SyncService', () => {
     };
     prisma.syncQueue.findFirst.mockResolvedValue(latest);
 
-    await expect(service.getDeviceStatus(deviceUuid)).resolves.toEqual({
+    await expect(
+      service.getDeviceStatus(deviceUuid, requester.id),
+    ).resolves.toEqual({
       device_uuid: deviceUuid,
       total: 4,
       processed: 3,
@@ -631,7 +686,7 @@ describe('SyncService', () => {
     });
 
     expect(prisma.syncQueue.findFirst).toHaveBeenCalledWith({
-      where: { device_uuid: deviceUuid },
+      where: { device_uuid: deviceUuid, submitted_by_id: requester.id },
       orderBy: { client_created_at: 'desc' },
       select: {
         client_uuid: true,
@@ -640,6 +695,11 @@ describe('SyncService', () => {
         synced_at: true,
         status: true,
       },
+    });
+    expect(prisma.syncQueue.groupBy).toHaveBeenCalledWith({
+      by: ['status'],
+      where: { device_uuid: deviceUuid, submitted_by_id: requester.id },
+      _count: { _all: true },
     });
   });
 });

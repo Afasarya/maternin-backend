@@ -13,6 +13,7 @@ import { UsersService } from '../users/users.service.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { UserRole } from '../common/constants/index.js';
 
 type AuthUser = Pick<User, 'id' | 'full_name' | 'phone_number' | 'role'>;
 type TokenUser = Pick<User, 'id' | 'role' | 'puskesmas_id'>;
@@ -60,9 +61,8 @@ export class AuthService {
         full_name: dto.full_name,
         phone_number: dto.phone_number,
         password_hash,
-        role: dto.role,
+        role: UserRole.IBU_HAMIL,
         email: dto.email,
-        puskesmas_id: dto.puskesmas_id,
       });
 
       return this.buildAuthResponse(user);
@@ -84,7 +84,11 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.usersService.findByPhone(dto.phone_number);
 
-    if (!user || !user.is_active || !(await bcrypt.compare(dto.password, user.password_hash))) {
+    if (
+      !user ||
+      !user.is_active ||
+      !(await bcrypt.compare(dto.password, user.password_hash))
+    ) {
       throw new UnauthorizedException('Nomor telepon atau password salah');
     }
 
@@ -97,7 +101,11 @@ export class AuthService {
       where: { token_hash: hash },
       include: { user: true },
     });
-    if (!session || session.expires_at <= new Date() || !session.user.is_active) {
+    if (
+      !session ||
+      session.expires_at <= new Date() ||
+      !session.user.is_active
+    ) {
       throw new UnauthorizedException('Refresh token tidak valid');
     }
     if (session.revoked_at) {
@@ -121,7 +129,8 @@ export class AuthService {
         where: { id: session.id, revoked_at: null },
         data: { revoked_at: new Date(), replaced_by_id: replacement.id },
       });
-      if (rotated.count !== 1) throw new UnauthorizedException('Refresh token sudah digunakan');
+      if (rotated.count !== 1)
+        throw new UnauthorizedException('Refresh token sudah digunakan');
       return {
         access_token: await this.generateToken(session.user),
         refresh_token: raw,
@@ -131,7 +140,9 @@ export class AuthService {
   }
 
   async logout(token: string) {
-    const session = await this.prisma.refreshSession.findUnique({ where: { token_hash: this.hashToken(token) } });
+    const session = await this.prisma.refreshSession.findUnique({
+      where: { token_hash: this.hashToken(token) },
+    });
     if (!session) throw new UnauthorizedException('Refresh token tidak valid');
     await this.prisma.refreshSession.updateMany({
       where: { family_id: session.family_id, revoked_at: null },
@@ -174,15 +185,24 @@ export class AuthService {
     });
   }
 
-  private newRefreshToken() { return randomBytes(48).toString('base64url'); }
-  private hashToken(token: string) { return createHash('sha256').update(token).digest('hex'); }
+  private newRefreshToken() {
+    return randomBytes(48).toString('base64url');
+  }
+  private hashToken(token: string) {
+    return createHash('sha256').update(token).digest('hex');
+  }
   private refreshExpiry() {
-    return new Date(Date.now() + this.config.get<number>('REFRESH_TOKEN_TTL_DAYS', 30) * 86_400_000);
+    return new Date(
+      Date.now() +
+        this.config.get<number>('REFRESH_TOKEN_TTL_DAYS', 30) * 86_400_000,
+    );
   }
   private accessExpiresSeconds() {
     const value = this.config.get<string>('JWT_ACCESS_EXPIRES_IN', '15m');
     const match = /^(\d+)([smhd])$/.exec(value);
     if (!match) return 900;
-    return Number(match[1]) * ({ s: 1, m: 60, h: 3600, d: 86400 }[match[2]] ?? 1);
+    return (
+      Number(match[1]) * ({ s: 1, m: 60, h: 3600, d: 86400 }[match[2]] ?? 1)
+    );
   }
 }

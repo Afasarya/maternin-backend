@@ -56,7 +56,7 @@ export class PostpartumController {
 
   @Get('postpartum-logs')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ibu_hamil', 'bidan', 'admin')
+  @Roles('ibu_hamil', 'bidan', 'kader', 'admin')
   findByProfile(
     @Query() query: QueryPostpartumLogsDto,
     @CurrentUser() requester: CurrentUserData,
@@ -70,7 +70,7 @@ export class PostpartumController {
 
   @Get('postpartum-logs/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ibu_hamil', 'bidan', 'admin')
+  @Roles('ibu_hamil', 'bidan', 'kader', 'admin')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() requester: CurrentUserData,

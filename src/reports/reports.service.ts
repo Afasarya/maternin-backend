@@ -230,7 +230,12 @@ export class ReportsService {
       ['risk_kuning', report.risk_distribution.kuning.count],
       ['risk_hijau', report.risk_distribution.hijau.count],
     ];
-    return '\uFEFF' + rows.map((row) => row.map((value) => this.csvCell(value)).join(',')).join('\r\n');
+    return (
+      '\uFEFF' +
+      rows
+        .map((row) => row.map((value) => this.csvCell(value)).join(','))
+        .join('\r\n')
+    );
   }
 
   private csvCell(value: unknown) {
