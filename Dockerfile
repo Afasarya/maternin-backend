@@ -7,7 +7,8 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
 
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
-COPY generated ./generated
+COPY prisma ./prisma
+RUN npx prisma generate --schema=prisma/schema.prisma
 COPY src ./src
 RUN npm run build \
     && npm prune --omit=dev \
