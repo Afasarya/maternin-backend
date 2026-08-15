@@ -2,13 +2,33 @@
 // npm install --save-dev prisma dotenv
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
+import { readFileSync, existsSync } from "node:fs";
 
-const DATABASE_URL = process.env["DATABASE_URL"];
-if (!DATABASE_URL) {
+function resolveDatabaseUrl(): string {
+  // 1. process.env (set by Docker ENV, runtime injection, or shell).
+  const fromEnv = process.env["DATABASE_URL"];
+  if (fromEnv && fromEnv.length > 0) return fromEnv;
+
+  // 2. /app/.env (baked from build args during `docker build`).
+  const envPath = "/app/.env";
+  if (existsSync(envPath)) {
+    const line = readFileSync(envPath, "utf8")
+      .split("\n")
+      .find((l) => l.startsWith("DATABASE_URL="));
+    if (line) {
+      const value = line.slice("DATABASE_URL=".length).trim().replace(/^["']|["']$/g, "");
+      if (value.length > 0) return value;
+    }
+  }
+
   throw new Error(
-    "[prisma.config] DATABASE_URL is not set. Container runtime env vars (or build args baked via ARG -> ENV) must include DATABASE_URL.",
+    "[prisma.config] DATABASE_URL not found in process.env or /app/.env. " +
+      "Make sure the build is passing --build-arg DATABASE_URL=... or the runtime " +
+      "container has DATABASE_URL set in its environment.",
   );
 }
+
+const DATABASE_URL = resolveDatabaseUrl();
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
