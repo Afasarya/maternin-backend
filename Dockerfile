@@ -60,8 +60,9 @@ COPY --from=build --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=nestjs:nodejs /app/dist ./dist
 COPY --from=build --chown=nestjs:nodejs /app/prisma ./prisma
 
+COPY --chown=nestjs:nodejs --chmod=0755 docker-entrypoint.sh /app/docker-entrypoint.sh
+
 USER nestjs
 EXPOSE 3000
 
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "echo '=== ENV DEBUG ===' && printenv | grep -iE 'database|redis|jwt' && echo '=== END DEBUG ===' && npx prisma migrate deploy && node dist/src/main.js"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
