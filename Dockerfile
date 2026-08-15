@@ -18,6 +18,7 @@ ARG XENDIT_WEBHOOK_TOKEN
 ARG CONSULTATION_PLATFORM_FEE
 
 COPY package.json package-lock.json ./
+COPY prisma.config.ts ./prisma.config.ts
 RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
 
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
@@ -63,6 +64,7 @@ COPY --from=build --chown=nestjs:nodejs /app/package.json /app/package-lock.json
 COPY --from=build --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=nestjs:nodejs /app/dist ./dist
 COPY --from=build --chown=nestjs:nodejs /app/prisma ./prisma
+COPY --from=build --chown=nestjs:nodejs /app/prisma.config.ts /app/prisma.config.ts
 COPY --from=build --chown=nestjs:nodejs /app/.env /app/.env
 
 COPY --chown=nestjs:nodejs --chmod=0755 docker-entrypoint.sh /app/docker-entrypoint.sh
